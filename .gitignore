@@ -47,3 +47,19 @@ dist/
 *.swo
 *.tmp
 
+# Optional Python packaging
+__pypackages__/
+pip-wheel-metadata/
+
+# Local runtime
+.python-version
+.cache/
+
+# Database files
+*.sqlite3
+*.db
+
+# Local env files
+.env.local
+.env.test
+
