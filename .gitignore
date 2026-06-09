@@ -1,0 +1,49 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+env/
+
+# Tooling caches
+.mypy_cache/
+.pytest_cache/
+.ruff_cache/
+.coverage
+htmlcov/
+
+# Type checker
+.dmypy.json
+
+# Build / packaging
+build/
+dist/
+*.egg-info/
+
+# OS / editor
+.DS_Store
+.idea/
+.vscode/
+
+# Logs
+*.log
+
+# Env files
+.env
+.env.*
+
+# pytest / application artifacts
+.pyre/
+
+# FastAPI/Uvicorn runtime
+*.pid
+
+# Others
+*.swp
+*.swo
+*.tmp
+
