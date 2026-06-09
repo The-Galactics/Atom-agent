@@ -5,26 +5,42 @@ from application.dtos import SynthesizeSpeechInputDTO, SynthesizeSpeechOutputDTO
 
 
 class SynthesizeSpeechUseCase:
-    def __init__(self, tts_port: TextToSpeechPort):
+    def __init__(
+        self,
+        tts_port: TextToSpeechPort,
+        max_text_chars: int = 1000,
+        default_language: str = "es",
+    ):
         self._tts_port = tts_port
+        self._max_text_chars = max_text_chars
+        self._default_language = default_language
 
     def execute(self, input_dto: SynthesizeSpeechInputDTO) -> SynthesizeSpeechOutputDTO:
         if not input_dto.text or not input_dto.text.strip():
             raise DomainValidationError("Text cannot be empty.")
 
-        if len(input_dto.text) > 5000:
-            raise DomainValidationError("Text length exceeds 5000 characters.")
+        normalized_text = input_dto.text.strip()
+
+        if len(normalized_text) > self._max_text_chars:
+            raise DomainValidationError(
+                f"Text length exceeds {self._max_text_chars} characters."
+            )
+
+        if input_dto.speed < 0.75 or input_dto.speed > 1.25:
+            raise DomainValidationError("Speech speed must be between 0.75 and 1.25.")
 
         try:
             audio_format = AudioFormat.from_string(input_dto.audio_format)
-            language = Language(input_dto.language) if input_dto.language else None
+            language = Language(input_dto.language or self._default_language)
         except ValueError as exc:
             raise DomainValidationError(str(exc)) from exc
 
         synthesis = self._tts_port.synthesize(
-            text=input_dto.text,
+            text=normalized_text,
             voice=input_dto.voice,
             format=audio_format,
+            language=language.code,
+            speed=input_dto.speed,
         )
 
         return SynthesizeSpeechOutputDTO(

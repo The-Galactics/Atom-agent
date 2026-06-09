@@ -1,11 +1,11 @@
 from typing import Callable
-from fastapi import APIRouter, File, Form, HTTPException, Response, UploadFile
+from fastapi import APIRouter, File, Form, Header, HTTPException, Response, UploadFile
 from pydantic import ValidationError
 from application.dtos import TranscribeAudioInputDTO, SynthesizeSpeechInputDTO
 from application.use_cases.transcribe_audio import TranscribeAudioUseCase
 from application.use_cases.synthesize_speech import SynthesizeSpeechUseCase
 from api.schemas import SynthesizeRequest, TranscribeResponse
-from domain.errors import DomainError, DomainValidationError
+from domain.errors import DomainError, DomainValidationError, ProviderError
 
 
 UseCaseProvider = Callable[[], TranscribeAudioUseCase] | TranscribeAudioUseCase
@@ -15,6 +15,7 @@ UseCaseProviderTts = Callable[[], SynthesizeSpeechUseCase] | SynthesizeSpeechUse
 def create_voice_router(
     transcribe_use_case_provider: UseCaseProvider,
     synthesize_use_case_provider: UseCaseProviderTts,
+    readiness_provider: Callable[[], dict] | None = None,
 ) -> APIRouter:
     router = APIRouter(prefix="/voice", tags=["voice"])
 
@@ -24,45 +25,110 @@ def create_voice_router(
     def _resolve_synthesize_use_case() -> SynthesizeSpeechUseCase:
         return synthesize_use_case_provider() if callable(synthesize_use_case_provider) else synthesize_use_case_provider
 
+    def _validation_status(message: str) -> int:
+        normalized = message.lower()
+        if "exceeds maximum size" in normalized or "too large" in normalized:
+            return 413
+        if "unsupported" in normalized and ("mime" in normalized or "format" in normalized):
+            return 415
+        return 400
+
+    def _error_detail(code: str, message: str, request_id: str | None) -> dict:
+        return {
+            "error": {
+                "code": code,
+                "message": message,
+                "request_id": request_id,
+            }
+        }
+
     @router.post("/transcribe", response_model=TranscribeResponse)
     async def transcribe(
-        audio_file: UploadFile = File(...),
+        file: UploadFile = File(...),
         language: str | None = Form(None),
         format: str | None = Form(None),
+        beam_size: int = Form(5),
+        x_request_id: str | None = Header(None, alias="X-Request-Id"),
     ) -> TranscribeResponse:
         try:
-            body = await audio_file.read()
+            body = await file.read()
             input_dto = TranscribeAudioInputDTO(
                 audio_bytes=body,
-                mime_type=audio_file.content_type or "application/octet-stream",
+                mime_type=file.content_type or "application/octet-stream",
                 language=language,
                 file_format=format,
+                beam_size=beam_size,
             )
             output = _resolve_transcribe_use_case().execute(input_dto)
             return TranscribeResponse(**output.__dict__)
         except ValidationError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=400,
+                detail=_error_detail("INVALID_REQUEST", str(exc), x_request_id),
+            ) from exc
         except DomainValidationError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            message = str(exc)
+            raise HTTPException(
+                status_code=_validation_status(message),
+                detail=_error_detail("VALIDATION_ERROR", message, x_request_id),
+            ) from exc
+        except ProviderError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=_error_detail("STT_PROVIDER_UNAVAILABLE", str(exc), x_request_id),
+            ) from exc
         except DomainError as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=500,
+                detail=_error_detail("DOMAIN_ERROR", str(exc), x_request_id),
+            ) from exc
 
     @router.post("/synthesize")
-    async def synthesize(request: SynthesizeRequest) -> Response:
+    async def synthesize(
+        request: SynthesizeRequest,
+        x_request_id: str | None = Header(None, alias="X-Request-Id"),
+    ) -> Response:
         try:
             input_dto = SynthesizeSpeechInputDTO(
                 text=request.text,
                 voice=request.voice,
                 audio_format=request.format,
                 language=request.language,
+                speed=request.speed,
             )
             output = _resolve_synthesize_use_case().execute(input_dto)
-            return Response(content=output.audio_bytes, media_type=output.mime_type)
+            headers = {
+                "Content-Disposition": f'inline; filename="speech.{output.format}"',
+            }
+            if output.duration_seconds is not None:
+                headers["X-Audio-Duration-Seconds"] = str(output.duration_seconds)
+            return Response(content=output.audio_bytes, media_type=output.mime_type, headers=headers)
         except ValidationError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=400,
+                detail=_error_detail("INVALID_REQUEST", str(exc), x_request_id),
+            ) from exc
         except DomainValidationError as exc:
-            raise HTTPException(status_code=400, detail=str(exc)) from exc
+            message = str(exc)
+            raise HTTPException(
+                status_code=_validation_status(message),
+                detail=_error_detail("VALIDATION_ERROR", message, x_request_id),
+            ) from exc
+        except ProviderError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=_error_detail("TTS_PROVIDER_UNAVAILABLE", str(exc), x_request_id),
+            ) from exc
         except DomainError as exc:
-            raise HTTPException(status_code=500, detail=str(exc)) from exc
+            raise HTTPException(
+                status_code=500,
+                detail=_error_detail("DOMAIN_ERROR", str(exc), x_request_id),
+            ) from exc
+
+    @router.get("/health")
+    async def voice_health() -> dict:
+        if readiness_provider is None:
+            return {"status": "ok"}
+        return readiness_provider()
 
     return router

@@ -7,6 +7,7 @@ class TranscribeAudioInputDTO:
     mime_type: str
     language: str | None = None
     file_format: str | None = None
+    beam_size: int = 5
 
 
 @dataclass
@@ -22,8 +23,9 @@ class TranscribeAudioOutputDTO:
 class SynthesizeSpeechInputDTO:
     text: str
     voice: str | None = None
-    audio_format: str = "mp3"
+    audio_format: str = "wav"
     language: str | None = None
+    speed: float = 1.0
 
 
 @dataclass

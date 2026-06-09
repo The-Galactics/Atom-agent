@@ -10,7 +10,8 @@ class TextToSpeechPort(ABC):
         self,
         text: str,
         voice: str | None = None,
-        format: AudioFormat = AudioFormat.MP3,
+        format: AudioFormat = AudioFormat.WAV,
         language: str | None = None,
+        speed: float = 1.0,
     ) -> SynthesisResult:
         raise NotImplementedError

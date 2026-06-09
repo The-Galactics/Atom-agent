@@ -9,8 +9,8 @@ class KokoroAdapter(TextToSpeechPort):
     def __init__(
         self,
         kokoro_client: KokoroClient,
-        default_voice: str = "alloy",
-        default_format: AudioFormat | str = AudioFormat.MP3,
+        default_voice: str = "af_heart",
+        default_format: AudioFormat | str = AudioFormat.WAV,
     ) -> None:
         self._client = kokoro_client
         self._default_voice = default_voice
@@ -24,8 +24,9 @@ class KokoroAdapter(TextToSpeechPort):
         self,
         text: str,
         voice: str | None = None,
-        format: AudioFormat = AudioFormat.MP3,
+        format: AudioFormat = AudioFormat.WAV,
         language: str | None = None,
+        speed: float = 1.0,
     ) -> SynthesisResult:
         selected_voice = voice or self._default_voice
         selected_format = format or self._default_format
@@ -35,6 +36,7 @@ class KokoroAdapter(TextToSpeechPort):
                 voice=selected_voice,
                 audio_format=selected_format.value,
                 language=language,
+                speed=speed,
             )
             return SynthesisResult(
                 audio_bytes=audio_bytes,

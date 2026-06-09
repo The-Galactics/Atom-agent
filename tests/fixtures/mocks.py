@@ -5,7 +5,13 @@ from ports.tts_port import TextToSpeechPort
 
 
 class FakeSpeechToTextPort(SpeechToTextPort):
-    def transcribe(self, audio: AudioPayload, language: Language | None = None, format: str | None = None) -> Transcription:
+    def transcribe(
+        self,
+        audio: AudioPayload,
+        language: Language | None = None,
+        format: str | None = None,
+        beam_size: int = 5,
+    ) -> Transcription:
         return Transcription(
             text="Este es un texto simulado.",
             language=language.code if language else "es-ES",
@@ -16,7 +22,14 @@ class FakeSpeechToTextPort(SpeechToTextPort):
 
 
 class FakeTextToSpeechPort(TextToSpeechPort):
-    def synthesize(self, text: str, voice: str | None = None, format: AudioFormat = AudioFormat.MP3, language: str | None = None) -> SynthesisResult:
+    def synthesize(
+        self,
+        text: str,
+        voice: str | None = None,
+        format: AudioFormat = AudioFormat.WAV,
+        language: str | None = None,
+        speed: float = 1.0,
+    ) -> SynthesisResult:
         return SynthesisResult(
             audio_bytes=b"FAKEAUDIO",
             mime_type=format.to_mime_type(),

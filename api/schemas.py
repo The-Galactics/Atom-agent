@@ -2,10 +2,11 @@ from pydantic import BaseModel, Field
 
 
 class SynthesizeRequest(BaseModel):
-    text: str = Field(..., min_length=1, max_length=5000)
+    text: str = Field(..., min_length=1, max_length=1000)
     voice: str | None = Field(None, max_length=100)
-    format: str = Field("mp3", pattern=r"^(mp3|wav|ogg|flac)$")
+    format: str = Field("wav", pattern=r"^(mp3|wav|ogg|flac)$")
     language: str | None = Field(None, max_length=10)
+    speed: float = Field(1.0, ge=0.75, le=1.25)
 
 
 class TranscribeResponse(BaseModel):

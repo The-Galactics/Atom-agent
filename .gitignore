@@ -2,6 +2,8 @@
 __pycache__/
 *.py[cod]
 *$py.class
+*.pyo
+*.pyd
 
 # Virtual environments
 .venv/
@@ -23,6 +25,8 @@ htmlcov/
 build/
 dist/
 *.egg-info/
+__pypackages__/
+pip-wheel-metadata/
 
 # OS / editor
 .DS_Store
@@ -32,34 +36,20 @@ dist/
 # Logs
 *.log
 
-# Env files
+# Environment files
 .env
 .env.*
-
-# pytest / application artifacts
-.pyre/
-
-# FastAPI/Uvicorn runtime
-*.pid
-
-# Others
-*.swp
-*.swo
-*.tmp
-
-# Optional Python packaging
-__pypackages__/
-pip-wheel-metadata/
-
-# Local runtime
-.python-version
-.cache/
-
-# Database files
-*.sqlite3
-*.db
-
-# Local env files
 .env.local
 .env.test
 
+# Runtime
+*.pid
+
+# Database
+*.sqlite3
+*.db
+
+# Backup files
+*.swp
+*.swo
+*.tmp

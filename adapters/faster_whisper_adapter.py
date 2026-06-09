@@ -1,6 +1,6 @@
 from __future__ import annotations
 import os
-import tempfile
+import threading
 from typing import Any
 from domain.errors import ProviderError
 from domain.value_objects import AudioPayload, Language
@@ -14,29 +14,39 @@ except ImportError:  # pragma: no cover
 
 
 class FasterWhisperAdapter(SpeechToTextPort):
-    def __init__(self, model_name: str = "small", device: str = "cpu") -> None:
+    def __init__(
+        self,
+        model_name: str = "small",
+        device: str = "cpu",
+        compute_type: str = "int8",
+        max_concurrency: int = 1,
+    ) -> None:
         if WhisperModel is None:
             raise RuntimeError("faster_whisper is not installed. Install optional provider requirements.")
-        self._model = WhisperModel(model_name, device=device)
-        self._temp_files: list[str] = []
+        self._model = WhisperModel(model_name, device=device, compute_type=compute_type)
+        self._semaphore = threading.Semaphore(max_concurrency)
 
     def transcribe(
         self,
         audio: AudioPayload,
         language: Language | None = None,
         format: str | None = None,
+        beam_size: int = 5,
     ) -> Transcription:
         temp_path = audio.save_to_temp_file()
-        self._temp_files.append(temp_path)
 
         try:
             options: dict[str, Any] = {}
-            if language:
+            if language and language.code.lower() != "auto":
                 options["language"] = language.code
                 options["task"] = "transcribe"
+            options["beam_size"] = beam_size
 
-            segments, info = self._model.transcribe(temp_path, **options)
-            text = " ".join(segment.text.strip() for segment in segments if segment.text)
+            with self._semaphore:
+                segments, info = self._model.transcribe(temp_path, **options)
+                materialized_segments = list(segments)
+
+            text = " ".join(segment.text.strip() for segment in materialized_segments if segment.text)
             confidence = None
             if hasattr(info, "avg_logprob"):
                 confidence = float(info.avg_logprob)
@@ -50,11 +60,11 @@ class FasterWhisperAdapter(SpeechToTextPort):
             )
         except Exception as exc:
             raise ProviderError(f"Faster Whisper failed: {exc}") from exc
-
-    def shutdown(self) -> None:
-        for temp_path in self._temp_files:
+        finally:
             try:
                 os.remove(temp_path)
             except OSError:
                 pass
-        self._temp_files.clear()
+
+    def shutdown(self) -> None:
+        return None

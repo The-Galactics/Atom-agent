@@ -11,5 +11,6 @@ class SpeechToTextPort(ABC):
         audio: AudioPayload,
         language: Language | None = None,
         format: str | None = None,
+        beam_size: int = 5,
     ) -> Transcription:
         raise NotImplementedError
