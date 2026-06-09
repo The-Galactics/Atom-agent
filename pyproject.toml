@@ -1,0 +1,20 @@
+[project]
+name = "voice-module"
+version = "0.1.0"
+description = "Voice module for STT and TTS using FastAPI, Faster Whisper and Kokoro"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+  "fastapi>=0.105.0",
+  "uvicorn[standard]>=0.23.0",
+  "pydantic>=2.10.0",
+  "requests>=2.31.0",
+  "python-multipart>=0.0.6",
+]
+
+[project.optional-dependencies]
+providers = ["faster-whisper>=0.8.0"]
+test = ["pytest>=8.0.0", "httpx>=0.26.0"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

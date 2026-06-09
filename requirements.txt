@@ -1,0 +1,9 @@
+fastapi>=0.105.0
+uvicorn[standard]>=0.23.0
+pydantic>=2.10.0
+requests>=2.31.0
+python-multipart>=0.0.6
+pytest>=8.0.0
+httpx>=0.26.0
+# Optional provider libraries
+# faster-whisper>=0.8.0
