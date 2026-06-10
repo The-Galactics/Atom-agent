@@ -43,13 +43,70 @@ MAX_TTS_TEXT_CHARS=1000
 
 `KOKORO_ENDPOINT` must point to the full Kokoro speech endpoint. For common Kokoro FastAPI deployments, use `/v1/audio/speech`.
 
+## Start Kokoro (Docker)
+
+First run (downloads image and creates container):
+
+```bash
+docker run -d --name kokoro-tts -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-cpu:latest
+```
+
+Next runs:
+
+```bash
+docker start kokoro-tts
+```
+
+Useful commands:
+
+```bash
+docker logs -f kokoro-tts
+docker stop kokoro-tts
+curl http://127.0.0.1:8880/health
+```
+
 ## Run
 
 ```bash
 pip install -r requirements.txt
 pip install faster-whisper
+# Keep Kokoro running on port 8880 before starting this API.
 uvicorn main:app --reload
 ```
+
+## Run with Docker Compose (API + Kokoro)
+
+This project includes `docker-compose.yml` to run both services together:
+
+```bash
+docker-compose up --build -d
+```
+
+If port `8000` is already in use:
+
+```bash
+VOICE_API_PORT=8001 docker-compose up --build -d
+```
+
+Check status and logs:
+
+```bash
+docker-compose ps
+docker-compose logs -f api
+docker-compose logs -f kokoro
+```
+
+Stop everything:
+
+```bash
+docker-compose down
+```
+
+Endpoints with compose:
+
+- API docs: `http://127.0.0.1:8000/docs`
+- Kokoro docs: `http://127.0.0.1:8880/docs`
+- Optional API port override: `http://127.0.0.1:${VOICE_API_PORT}/docs`
 
 ## API
 

@@ -1,4 +1,4 @@
-from fastapi import FastAPI
+from fastapi import FastAPI, Response
 
 from api.controllers import create_voice_router
 from infrastructure.config import get_settings
@@ -26,6 +26,22 @@ def shutdown_event() -> None:
 @app.get("/health")
 async def health() -> dict:
     return {"status": "ok"}
+
+
+@app.get("/")
+async def root() -> dict:
+    return {
+        "service": "voice-module",
+        "status": "ok",
+        "docs": "/docs",
+        "health": "/health",
+        "voice_health": "/voice/health",
+    }
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon() -> Response:
+    return Response(status_code=204)
 
 
 def _container():

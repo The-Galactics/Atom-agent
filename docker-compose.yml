@@ -1,0 +1,18 @@
+services:
+  kokoro:
+    image: ghcr.io/remsky/kokoro-fastapi-cpu:latest
+    ports:
+      - "8880:8880"
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      - kokoro
+    env_file:
+      - .env
+    environment:
+      KOKORO_ENDPOINT: http://kokoro:8880/v1/audio/speech
+    ports:
+      - "${VOICE_API_PORT:-8000}:8000"
