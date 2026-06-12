@@ -1,163 +1,88 @@
-# Voice Module
+# Atom Agent - AI Conversational System (v0.2.0)
 
-Sprint 1 implements a standalone FastAPI voice module with hexagonal architecture:
+Atom Agent is a high-performance conversational intelligence layer designed for mobile integration (Android). It features a hexagonal architecture to support modularity and easy scaling of its conversational, memory, and voice capabilities.
 
-- STT: Faster Whisper
-- TTS: Kokoro HTTP endpoint
-- API: FastAPI
-- Tests: fake providers for unit/integration tests
+## 🚀 Features
 
-## Structure
+- **Conversational Intelligence:** Powered by **Google Gemma** (via NVIDIA NIM).
+- **Orchestration:** Complex flows managed by **LangGraph**.
+- **Semantic Memory:** **Qdrant** integration with **BGE-m3** embeddings for context-aware responses.
+- **Voice Capabilities:**
+  - **STT:** Faster Whisper for high-accuracy speech-to-text.
+  - **TTS:** Kokoro for premium, natural-sounding synthesis.
+- **Hexagonal Architecture:** Decoupled domain logic from infrastructure (LLMs, Vector Stores, Voice Engines).
 
-- `api/`: FastAPI controllers and schemas.
-- `application/`: use cases and DTOs.
-- `domain/`: pure models, value objects, and errors.
-- `ports/`: STT, TTS, and optional audio storage contracts.
-- `adapters/`: Faster Whisper, Kokoro, and fake provider implementations.
-- `infrastructure/`: configuration, provider clients, composition root, logging.
-- `tests/`: unit and integration tests.
+## 📂 Structure
 
-## Configuration
+- `api/`: FastAPI controllers, schemas, and error handling.
+- `application/`:
+  - `agents/`: LangGraph workflow definition (graph, nodes, state).
+  - `use_cases/`: Core logic orchestration (Chat, Transcribe, Synthesize).
+- `domain/`: Pure business entities (Models, Value Objects, Errors).
+- `ports/`: Abstract interfaces for all external dependencies.
+- `adapters/`: Concrete implementations (LLM, Embeddings, VectorStore, Speech, History).
+- `infrastructure/`: Configuration, Dependency Injection (Container), Logging, and Clients.
 
-Create a `.env` file or export these variables:
+## 🛠️ Requirements
 
-```bash
+- Python 3.10+
+- Docker & Docker Compose
+- NVIDIA API Key (for Gemma)
+
+## ⚙️ Configuration
+
+Create a `.env` file based on `.env.example`:
+
+```env
+# LLM & Memory
+NVIDIA_API_KEY=your_key_here
+LLM_MODEL=google/gemma-3n-e4b-it
+QDRANT_URL=http://localhost:6333
+QDRANT_COLLECTION=memory
+EMBEDDING_MODEL=BAAI/bge-m3
+
+# Voice
 KOKORO_ENDPOINT=http://localhost:8880/v1/audio/speech
-KOKORO_API_KEY=
 KOKORO_DEFAULT_VOICE=af_heart
-KOKORO_MODEL=kokoro
-KOKORO_TIMEOUT_SECONDS=30
-KOKORO_MAX_RETRIES=2
-KOKORO_RETRY_BACKOFF_SECONDS=0.25
-
 FASTER_WHISPER_MODEL=small
-FASTER_WHISPER_DEVICE=cpu
-FASTER_WHISPER_COMPUTE_TYPE=int8
-MAX_STT_CONCURRENCY=1
-
-DEFAULT_AUDIO_FORMAT=wav
-DEFAULT_LANGUAGE=es
-MAX_AUDIO_PAYLOAD_BYTES=10485760
-MAX_TTS_TEXT_CHARS=1000
 ```
 
-`KOKORO_ENDPOINT` must point to the full Kokoro speech endpoint. For common Kokoro FastAPI deployments, use `/v1/audio/speech`.
+## 🐳 Quick Start (with Docker Compose)
 
-## Start Kokoro (Docker)
-
-First run (downloads image and creates container):
-
-```bash
-docker run -d --name kokoro-tts -p 8880:8880 ghcr.io/remsky/kokoro-fastapi-cpu:latest
-```
-
-Next runs:
-
-```bash
-docker start kokoro-tts
-```
-
-Useful commands:
-
-```bash
-docker logs -f kokoro-tts
-docker stop kokoro-tts
-curl http://127.0.0.1:8880/health
-```
-
-## Run
-
-```bash
-pip install -r requirements.txt
-pip install faster-whisper
-# Keep Kokoro running on port 8880 before starting this API.
-uvicorn main:app --reload
-```
-
-## Run with Docker Compose (API + Kokoro)
-
-This project includes `docker-compose.yml` to run both services together:
+The easiest way to run the full stack (API + Qdrant + Kokoro):
 
 ```bash
 docker-compose up --build -d
 ```
 
-If port `8000` is already in use:
-
-```bash
-VOICE_API_PORT=8001 docker-compose up --build -d
-```
-
-Check status and logs:
-
+Check status:
 ```bash
 docker-compose ps
-docker-compose logs -f api
-docker-compose logs -f kokoro
 ```
 
-Stop everything:
+## 🧪 Testing the Agent
 
+### Chat Endpoint
 ```bash
-docker-compose down
+curl -X POST http://localhost:8000/chat \
+  -H "Content-Type: application/json" \
+  -d '{"text": "Hola Atom, mi nombre es Gemi.", "session_id": "user_001"}'
 ```
 
-Endpoints with compose:
-
-- API docs: `http://127.0.0.1:8000/docs`
-- Kokoro docs: `http://127.0.0.1:8880/docs`
-- Optional API port override: `http://127.0.0.1:${VOICE_API_PORT}/docs`
-
-## API
-
-```text
-GET  /health
-GET  /voice/health
-POST /voice/transcribe
-POST /voice/synthesize
-```
-
-STT supports these input MIME types:
-
-```text
-audio/wav
-audio/x-wav
-audio/flac
-audio/ogg
-```
-
-TTS defaults to `audio/wav`.
-
-See `ANDROID_CONTRACT.md` for the Android Java/OkHttp contract.
-
-## Quick Checks
-
-Transcribe:
-
+### Voice Endpoints
+**Transcribe (STT):**
 ```bash
 curl -X POST http://localhost:8000/voice/transcribe \
-  -H "X-Request-Id: local-test" \
-  -F "file=@sample.wav;type=audio/wav" \
-  -F "language=es" \
-  -F "format=wav" \
-  -F "beam_size=5"
+  -F "file=@audio.wav;type=audio/wav"
 ```
 
-Synthesize:
-
+**Synthesize (TTS):**
 ```bash
 curl -X POST http://localhost:8000/voice/synthesize \
   -H "Content-Type: application/json" \
-  -H "Accept: audio/wav" \
-  -H "X-Request-Id: local-test" \
-  -d '{"text":"Hola, soy tu asistente.","voice":"af_heart","language":"es","format":"wav","speed":1.0}' \
-  --output speech.wav
+  -d '{"text":"Hola Gemi, ¿cómo puedo ayudarte?"}' \
+  --output response.wav
 ```
 
-## Tests
-
-```bash
-pytest
-```
-
-The default test suite uses fake STT/TTS providers and does not require Faster Whisper or Kokoro.
+## 📜 Android Integration
+See `ANDROID_CONTRACT.md` for Java/OkHttp implementation details.

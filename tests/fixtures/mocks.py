@@ -1,4 +1,4 @@
-from domain.models import Transcription, SynthesisResult
+from domain.voice.models import Transcription, SynthesisResult
 from domain.value_objects import AudioFormat, AudioPayload, Language
 from ports.stt_port import SpeechToTextPort
 from ports.tts_port import TextToSpeechPort

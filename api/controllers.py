@@ -8,8 +8,48 @@ from api.schemas import SynthesizeRequest, TranscribeResponse
 from domain.errors import DomainError, DomainValidationError, ProviderError
 
 
+from application.use_cases.chat import ChatUseCase
+from api.schemas import SynthesizeRequest, TranscribeResponse, ChatRequest, ChatResponse
+
 UseCaseProvider = Callable[[], TranscribeAudioUseCase] | TranscribeAudioUseCase
 UseCaseProviderTts = Callable[[], SynthesizeSpeechUseCase] | SynthesizeSpeechUseCase
+UseCaseProviderChat = Callable[[], ChatUseCase] | ChatUseCase
+
+
+def _error_detail(code: str, message: str, request_id: str | None) -> dict:
+    return {
+        "error": {
+            "code": code,
+            "message": message,
+            "request_id": request_id,
+        }
+    }
+
+
+def create_chat_router(chat_use_case_provider: UseCaseProviderChat) -> APIRouter:
+    router = APIRouter(prefix="/chat", tags=["chat"])
+
+    def _resolve_chat_use_case() -> ChatUseCase:
+        return chat_use_case_provider() if callable(chat_use_case_provider) else chat_use_case_provider
+
+    @router.post("", response_model=ChatResponse)
+    async def chat(
+        request: ChatRequest,
+        x_request_id: str | None = Header(None, alias="X-Request-Id"),
+    ) -> ChatResponse:
+        try:
+            response_text = await _resolve_chat_use_case().execute(
+                session_id=request.session_id,
+                text=request.text,
+            )
+            return ChatResponse(text=response_text, session_id=request.session_id)
+        except Exception as exc:
+            raise HTTPException(
+                status_code=500,
+                detail=_error_detail("CHAT_ERROR", str(exc), x_request_id),
+            ) from exc
+
+    return router
 
 
 def create_voice_router(
@@ -32,15 +72,6 @@ def create_voice_router(
         if "unsupported" in normalized and ("mime" in normalized or "format" in normalized):
             return 415
         return 400
-
-    def _error_detail(code: str, message: str, request_id: str | None) -> dict:
-        return {
-            "error": {
-                "code": code,
-                "message": message,
-                "request_id": request_id,
-            }
-        }
 
     @router.post("/transcribe", response_model=TranscribeResponse)
     async def transcribe(

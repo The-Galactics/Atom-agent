@@ -15,3 +15,13 @@ class TranscribeResponse(BaseModel):
     duration_seconds: float | None = None
     confidence: float | None = None
     provider: str
+
+
+class ChatRequest(BaseModel):
+    text: str = Field(..., min_length=1)
+    session_id: str = "default"
+
+
+class ChatResponse(BaseModel):
+    text: str
+    session_id: str

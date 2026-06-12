@@ -49,7 +49,15 @@ pip-wheel-metadata/
 *.sqlite3
 *.db
 
-# Backup files
-*.swp
-*.swo
-*.tmp
+# Models
+.cache/
+models/
+*.bin
+*.pth
+*.pt
+
+# Local data
+storage/
+qdrant_storage/
+nohup.out
+output.log

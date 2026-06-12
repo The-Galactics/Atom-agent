@@ -1,6 +1,6 @@
 from fastapi import FastAPI, Response
 
-from api.controllers import create_voice_router
+from api.controllers import create_voice_router, create_chat_router
 from infrastructure.config import get_settings
 from infrastructure.container import build_container
 from infrastructure.logging import configure_logging, request_logging_middleware
@@ -8,7 +8,7 @@ from infrastructure.logging import configure_logging, request_logging_middleware
 
 configure_logging()
 
-app = FastAPI(title="Voice Module", version="0.1.0")
+app = FastAPI(title="Atom Agent", version="0.2.0")
 app.middleware("http")(request_logging_middleware)
 
 
@@ -31,7 +31,7 @@ async def health() -> dict:
 @app.get("/")
 async def root() -> dict:
     return {
-        "service": "voice-module",
+        "service": "atom-agent",
         "status": "ok",
         "docs": "/docs",
         "health": "/health",
@@ -53,5 +53,11 @@ app.include_router(
         transcribe_use_case_provider=lambda: _container().transcribe_use_case,
         synthesize_use_case_provider=lambda: _container().synthesize_use_case,
         readiness_provider=lambda: _container().readiness(),
+    )
+)
+
+app.include_router(
+    create_chat_router(
+        chat_use_case_provider=lambda: _container().chat_use_case,
     )
 )

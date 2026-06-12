@@ -1,7 +1,7 @@
 from __future__ import annotations
 from abc import ABC, abstractmethod
 from domain.value_objects import AudioPayload, Language
-from domain.models import Transcription
+from domain.voice.models import Transcription
 
 
 class SpeechToTextPort(ABC):

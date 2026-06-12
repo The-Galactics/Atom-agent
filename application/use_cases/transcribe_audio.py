@@ -1,7 +1,7 @@
 from typing import Optional
 from domain.value_objects import AudioPayload, AudioFormat, Language
 from domain.errors import DomainValidationError
-from domain.models import Transcription
+from domain.voice.models import Transcription
 from ports.stt_port import SpeechToTextPort
 from application.dtos import TranscribeAudioInputDTO, TranscribeAudioOutputDTO
 

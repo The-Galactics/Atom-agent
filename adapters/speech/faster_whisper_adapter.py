@@ -4,7 +4,7 @@ import threading
 from typing import Any
 from domain.errors import ProviderError
 from domain.value_objects import AudioPayload, Language
-from domain.models import Transcription
+from domain.voice.models import Transcription
 from ports.stt_port import SpeechToTextPort
 
 try:

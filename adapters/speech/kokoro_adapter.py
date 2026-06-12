@@ -1,6 +1,6 @@
 from domain.errors import ProviderError
 from domain.value_objects import AudioFormat, Language
-from domain.models import SynthesisResult
+from domain.voice.models import SynthesisResult
 from ports.tts_port import TextToSpeechPort
 from infrastructure.provider_clients import KokoroClient
 
