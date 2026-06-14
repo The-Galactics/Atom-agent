@@ -1,9 +1,11 @@
+import asyncio
 from fastapi import FastAPI, Response
 
 from api.controllers import create_voice_router, create_chat_router
 from infrastructure.config import get_settings
 from infrastructure.container import build_container
 from infrastructure.logging import configure_logging, request_logging_middleware
+from infrastructure.grpc.server import serve as start_grpc_server
 
 
 configure_logging()
@@ -13,8 +15,14 @@ app.middleware("http")(request_logging_middleware)
 
 
 @app.on_event("startup")
-def startup_event() -> None:
-    app.state.voice_container = build_container(get_settings())
+async def startup_event() -> None:
+    settings = get_settings()
+    container = build_container(settings)
+    app.state.voice_container = container
+    
+    # Start gRPC server in a background task
+    asyncio.create_task(start_grpc_server(container))
+    print("gRPC server background task created")
 
 
 @app.on_event("shutdown")
