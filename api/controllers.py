@@ -1,15 +1,12 @@
 from typing import Callable
 from fastapi import APIRouter, File, Form, Header, HTTPException, Response, UploadFile
 from pydantic import ValidationError
-from application.dtos import TranscribeAudioInputDTO, SynthesizeSpeechInputDTO
+from application.dtos import TranscribeAudioInputDTO, SynthesizeSpeechInputDTO, ChatInputDTO
 from application.use_cases.transcribe_audio import TranscribeAudioUseCase
 from application.use_cases.synthesize_speech import SynthesizeSpeechUseCase
-from api.schemas import SynthesizeRequest, TranscribeResponse
-from domain.errors import DomainError, DomainValidationError, ProviderError
-
-
 from application.use_cases.chat import ChatUseCase
 from api.schemas import SynthesizeRequest, TranscribeResponse, ChatRequest, ChatResponse
+from domain.errors import DomainError, DomainValidationError, ProviderError
 
 UseCaseProvider = Callable[[], TranscribeAudioUseCase] | TranscribeAudioUseCase
 UseCaseProviderTts = Callable[[], SynthesizeSpeechUseCase] | SynthesizeSpeechUseCase
@@ -38,11 +35,12 @@ def create_chat_router(chat_use_case_provider: UseCaseProviderChat) -> APIRouter
         x_request_id: str | None = Header(None, alias="X-Request-Id"),
     ) -> ChatResponse:
         try:
-            response_text = await _resolve_chat_use_case().execute(
-                session_id=request.session_id,
+            input_dto = ChatInputDTO(
                 text=request.text,
+                session_id=request.session_id,
             )
-            return ChatResponse(text=response_text, session_id=request.session_id)
+            output = await _resolve_chat_use_case().execute(input_dto)
+            return ChatResponse(text=output.text, session_id=output.session_id)
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
