@@ -35,3 +35,15 @@ class SynthesizeSpeechOutputDTO:
     format: str
     duration_seconds: float | None = None
     provider: str = ""
+
+
+@dataclass
+class ChatInputDTO:
+    text: str
+    session_id: str = "default"
+
+
+@dataclass
+class ChatOutputDTO:
+    text: str
+    session_id: str
