@@ -1,0 +1,81 @@
+syntax = "proto3";
+
+package com.atom.proto;
+
+option java_multiple_files = true;
+option java_package = "com.atom.infrastructure.adapter.grpc";
+option java_outer_classname = "AiProto";
+
+service AtomAgentService {
+
+  // Conversational AI (Unary call)
+  rpc ExecuteCommand (CommandRequest) returns (CommandResponse);
+
+  // Conversational AI (Streaming response)
+  rpc StreamChat (MessageRequest) returns (stream MessageResponse);
+
+  // Voice: Speech-to-Text
+  rpc Transcribe (TranscribeRequest) returns (TranscribeResponse);
+
+  // Voice: Text-to-Speech
+  rpc Synthesize (SynthesizeRequest) returns (stream SynthesizeResponse);
+
+}
+
+// --- Chat Messages ---
+
+message CommandRequest {
+  string user_id = 1;
+  string command = 2;
+}
+
+message CommandResponse {
+  bool success = 1;
+  string out_message = 2;
+}
+
+message MessageRequest {
+  string user_id = 1;
+  string chat_id = 2;
+  string message = 3;
+}
+
+message MessageResponse {
+  string script_token = 1;
+  string status = 2;
+  bool finished = 3;
+}
+
+// --- Voice STT Messages ---
+
+message TranscribeRequest {
+  bytes audio_bytes = 1;
+  string mime_type = 2;
+  string language = 3;
+  string format = 4;
+  int32 beam_size = 5;
+}
+
+message TranscribeResponse {
+  string text = 1;
+  string language = 2;
+  float duration_seconds = 3;
+  float confidence = 4;
+  string provider = 5;
+}
+
+// --- Voice TTS Messages ---
+
+message SynthesizeRequest {
+  string text = 1;
+  string voice = 2;
+  string language = 3;
+  string format = 4;
+  float speed = 5;
+}
+
+message SynthesizeResponse {
+  bytes audio_bytes = 1;
+  string mime_type = 2;
+  string format = 3;
+}
