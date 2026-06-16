@@ -33,6 +33,13 @@ class Settings(BaseSettings):
     qdrant_collection: str = Field("memory", env="QDRANT_COLLECTION")
     embedding_model: str = Field("models/embedding-001", env="EMBEDDING_MODEL")
 
+    # Feature flags for graceful degradation. Both default to True so the
+    # service is production-capable; at runtime, voice further requires the
+    # optional STT/TTS stack to be importable, and memory degrades silently
+    # to LLM-only when Qdrant / embeddings are unavailable.
+    voice_enabled: bool = Field(True, env="VOICE_ENABLED")
+    memory_enabled: bool = Field(True, env="MEMORY_ENABLED")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

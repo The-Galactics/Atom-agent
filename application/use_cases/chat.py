@@ -1,5 +1,6 @@
 from domain.conversation.models import ChatMessage
 from ports.history_port import HistoryPort
+from application.dtos import ChatInputDTO, ChatOutputDTO
 
 
 class ChatUseCase:
@@ -9,14 +10,14 @@ class ChatUseCase:
         self.graph = graph
         self.history = history_adapter
 
-    async def execute(self, session_id: str, text: str) -> str:
+    async def execute(self, input_dto: ChatInputDTO) -> ChatOutputDTO:
         # 1) Load previous messages for the session.
-        history = self.history.get_history(session_id)
+        history = self.history.get_history(input_dto.session_id)
 
         # 2) Invoke the orchestration graph (retrieve -> generate -> store).
         initial_state = {
-            "session_id": session_id,
-            "input": text,
+            "session_id": input_dto.session_id,
+            "input": input_dto.text,
             "messages": history,
             "context": "",
             "response": None
@@ -27,7 +28,9 @@ class ChatUseCase:
 
         # 3) Persist messages returned by the graph node(s).
         for msg in final_state["messages"]:
-            self.history.add_message(session_id, msg)
+            self.history.add_message(input_dto.session_id, msg)
 
-        # Response is expected to be created by the graph's generate node.
-        return response.content
+        return ChatOutputDTO(
+            text=response.content,
+            session_id=input_dto.session_id
+        )

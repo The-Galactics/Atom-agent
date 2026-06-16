@@ -1,16 +1,12 @@
 from typing import Callable
 from fastapi import APIRouter, File, Form, Header, HTTPException, Response, UploadFile
 from pydantic import ValidationError
-from application.dtos import TranscribeAudioInputDTO, SynthesizeSpeechInputDTO
+from application.dtos import TranscribeAudioInputDTO, SynthesizeSpeechInputDTO, ChatInputDTO
 from application.use_cases.transcribe_audio import TranscribeAudioUseCase
 from application.use_cases.synthesize_speech import SynthesizeSpeechUseCase
-from api.schemas import SynthesizeRequest, TranscribeResponse
-from domain.errors import DomainError, DomainValidationError, ProviderError
-
-# Domain use cases injected from the container.
-
 from application.use_cases.chat import ChatUseCase
 from api.schemas import SynthesizeRequest, TranscribeResponse, ChatRequest, ChatResponse
+from domain.errors import DomainError, DomainValidationError, ProviderError
 
 
 UseCaseProvider = Callable[[], TranscribeAudioUseCase] | TranscribeAudioUseCase
@@ -43,12 +39,12 @@ def create_chat_router(chat_use_case_provider: UseCaseProviderChat) -> APIRouter
         x_request_id: str | None = Header(None, alias="X-Request-Id"),
     ) -> ChatResponse:
         try:
-            # Run the chat use case and return plain text output.
-            response_text = await _resolve_chat_use_case().execute(
-                session_id=request.session_id,
+            input_dto = ChatInputDTO(
                 text=request.text,
+                session_id=request.session_id,
             )
-            return ChatResponse(text=response_text, session_id=request.session_id)
+            output = await _resolve_chat_use_case().execute(input_dto)
+            return ChatResponse(text=output.text, session_id=output.session_id)
         except Exception as exc:
             raise HTTPException(
                 status_code=500,
@@ -91,6 +87,16 @@ def create_voice_router(
         beam_size: int = Form(5),
         x_request_id: str | None = Header(None, alias="X-Request-Id"),
     ) -> TranscribeResponse:
+        use_case = _resolve_transcribe_use_case()
+        if use_case is None:
+            raise HTTPException(
+                status_code=503,
+                detail=_error_detail(
+                    "STT_PROVIDER_UNAVAILABLE",
+                    "Voice provider unavailable (STT).",
+                    x_request_id,
+                ),
+            )
         try:
             # Build input DTO from multipart request data.
             body = await file.read()
@@ -101,7 +107,7 @@ def create_voice_router(
                 file_format=format,
                 beam_size=beam_size,
             )
-            output = _resolve_transcribe_use_case().execute(input_dto)
+            output = use_case.execute(input_dto)
             return TranscribeResponse(**output.__dict__)
         except ValidationError as exc:
             raise HTTPException(
@@ -130,6 +136,16 @@ def create_voice_router(
         request: SynthesizeRequest,
         x_request_id: str | None = Header(None, alias="X-Request-Id"),
     ) -> Response:
+        use_case = _resolve_synthesize_use_case()
+        if use_case is None:
+            raise HTTPException(
+                status_code=503,
+                detail=_error_detail(
+                    "TTS_PROVIDER_UNAVAILABLE",
+                    "Voice provider unavailable (TTS).",
+                    x_request_id,
+                ),
+            )
         try:
             # Build input DTO from JSON payload.
             input_dto = SynthesizeSpeechInputDTO(
@@ -139,8 +155,7 @@ def create_voice_router(
                 language=request.language,
                 speed=request.speed,
             )
-            output = _resolve_synthesize_use_case().execute(input_dto)
-            # Expose suggested filename and optional duration metadata.
+            output = use_case.execute(input_dto)
             headers = {
                 "Content-Disposition": f'inline; filename="speech.{output.format}"',
             }

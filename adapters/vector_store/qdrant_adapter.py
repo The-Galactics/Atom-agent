@@ -8,7 +8,15 @@ from ports.vector_store_port import VectorStorePort
 
 
 class QdrantAdapter(VectorStorePort):
-    # Vector-store adapter for semantic memory operations.
+    """Vector store adapter backed by Qdrant.
+
+    The Qdrant client connection and collection bootstrap are performed lazily
+    on first use rather than in ``__init__`` so that an unreachable Qdrant
+    instance never blocks startup. Failures raised here are expected to be
+    caught at the node/use-case boundary so chat can degrade to LLM-only
+    (no long-term memory) instead of crashing.
+    """
+
     def __init__(
         self,
         url: str,
@@ -16,10 +24,18 @@ class QdrantAdapter(VectorStorePort):
         collection_name: str,
         embedding_port: EmbeddingPort,
     ):
-        self.client = QdrantClient(url=url, api_key=api_key)
+        self.url = url
+        self.api_key = api_key
         self.collection_name = collection_name
         self.embedding_port = embedding_port
-        self._ensure_collection()
+        self._client: QdrantClient | None = None
+
+    @property
+    def client(self) -> QdrantClient:
+        if self._client is None:
+            self._client = QdrantClient(url=self.url, api_key=self.api_key)
+            self._ensure_collection()
+        return self._client
 
     def _ensure_collection(self):
         # Verify the collection exists and has the expected vector dimension.

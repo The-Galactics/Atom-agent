@@ -1,8 +1,49 @@
 import pytest
 from application.use_cases.transcribe_audio import TranscribeAudioUseCase
 from application.use_cases.synthesize_speech import SynthesizeSpeechUseCase
-from application.dtos import TranscribeAudioInputDTO, SynthesizeSpeechInputDTO
+from application.use_cases.chat import ChatUseCase
+from application.dtos import TranscribeAudioInputDTO, SynthesizeSpeechInputDTO, ChatInputDTO
 from tests.fixtures.mocks import FakeSpeechToTextPort, FakeTextToSpeechPort
+
+
+class FakeHistoryPort:
+    def __init__(self):
+        self.history = {}
+
+    def get_history(self, session_id: str):
+        return self.history.get(session_id, [])
+
+    def add_message(self, session_id: str, message):
+        if session_id not in self.history:
+            self.history[session_id] = []
+        self.history[session_id].append(message)
+
+    def clear(self, session_id: str):
+        self.history[session_id] = []
+
+
+class MockGraph:
+    async def ainvoke(self, state):
+        from domain.conversation.models import ChatMessage
+        assistant_msg = ChatMessage(role="assistant", content="Hola! Soy Atom.")
+        state["messages"].append(assistant_msg)
+        state["response"] = assistant_msg
+        return state
+
+
+import asyncio
+
+def test_chat_use_case():
+    history = FakeHistoryPort()
+    graph = MockGraph()
+    use_case = ChatUseCase(graph=graph, history_adapter=history)
+    
+    input_dto = ChatInputDTO(text="Hola", session_id="user_1")
+    output = asyncio.run(use_case.execute(input_dto))
+    
+    assert output.text == "Hola! Soy Atom."
+    assert output.session_id == "user_1"
+    assert len(history.get_history("user_1")) > 0
 
 
 def test_transcribe_audio_use_case():
