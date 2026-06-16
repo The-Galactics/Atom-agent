@@ -3,6 +3,7 @@ from domain.conversation.models import ChatMessage
 
 
 class LLMPort(ABC):
+    # Contract for chat-capable language models.
     @abstractmethod
     async def chat(
         self,

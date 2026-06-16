@@ -3,6 +3,7 @@ from domain.memory.models import MemoryEntry
 
 
 class VectorStorePort(ABC):
+    # Contract for semantic memory persistence and retrieval.
     @abstractmethod
     async def store(self, content: str, metadata: dict) -> None:
         """Stores a memory entry in the vector database."""

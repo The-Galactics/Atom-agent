@@ -6,6 +6,7 @@ from infrastructure.provider_clients import KokoroClient
 
 
 class KokoroAdapter(TextToSpeechPort):
+    # Text-to-speech adapter backed by Kokoro HTTP API.
     def __init__(
         self,
         kokoro_client: KokoroClient,
@@ -28,6 +29,7 @@ class KokoroAdapter(TextToSpeechPort):
         language: str | None = None,
         speed: float = 1.0,
     ) -> SynthesisResult:
+        # Apply defaults and delegate synthesis to provider client.
         selected_voice = voice or self._default_voice
         selected_format = format or self._default_format
         try:

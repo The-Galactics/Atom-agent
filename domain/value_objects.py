@@ -6,6 +6,7 @@ import tempfile
 
 
 class AudioFormat(str, Enum):
+    # Supported audio formats across STT and TTS.
     MP3 = "mp3"
     WAV = "wav"
     OGG = "ogg"
@@ -13,6 +14,7 @@ class AudioFormat(str, Enum):
 
     @classmethod
     def from_string(cls, format_value: str) -> "AudioFormat":
+        # Parse normalized format string into enum value.
         normalized = format_value.lower().strip()
         try:
             return cls(normalized)
@@ -21,6 +23,7 @@ class AudioFormat(str, Enum):
 
     @classmethod
     def from_mime_type(cls, mime_type: str) -> "AudioFormat":
+        # Map known audio mime types to enum values.
         mapping = {
             "audio/mpeg": cls.MP3,
             "audio/mp3": cls.MP3,
@@ -48,6 +51,7 @@ class AudioFormat(str, Enum):
 
 @dataclass(frozen=True)
 class Language:
+    # Language code value object with basic validation.
     code: str
 
     def __post_init__(self) -> None:
@@ -62,6 +66,7 @@ class Language:
 
 @dataclass
 class AudioPayload:
+    # Binary audio content and metadata.
     data: bytes
     mime_type: str
     sample_rate: int | None = None
@@ -78,6 +83,7 @@ class AudioPayload:
         return AudioFormat.from_mime_type(self.mime_type)
 
     def save_to_temp_file(self) -> str:
+        # Persist payload to a temporary file for provider SDKs.
         suffix = f".{self.format.file_extension()}"
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as temp_file:
             temp_file.write(self.data)

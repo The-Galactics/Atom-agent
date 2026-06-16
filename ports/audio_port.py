@@ -4,6 +4,7 @@ from domain.value_objects import AudioPayload
 
 
 class AudioStoragePort(ABC):
+    # Contract for temporary audio payload persistence.
     @abstractmethod
     def save(self, key: str, audio: AudioPayload) -> str:
         raise NotImplementedError

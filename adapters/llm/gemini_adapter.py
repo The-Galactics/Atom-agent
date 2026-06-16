@@ -4,6 +4,7 @@ from ports.llm_port import LLMPort
 
 
 class GeminiAdapter(LLMPort):
+    # LLM adapter backed by Google Gemini via LangChain.
     def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
         self.llm = ChatGoogleGenerativeAI(
             model=model,
@@ -12,6 +13,7 @@ class GeminiAdapter(LLMPort):
         )
 
     async def chat(self, messages: list[ChatMessage]) -> ChatMessage:
+        # Translate internal messages into LangChain tuple format.
         langchain_messages = [
             ("system" if m.role == "system" else "human" if m.role == "user" else "ai", m.content)
             for m in messages

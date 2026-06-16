@@ -7,9 +7,11 @@ from application.use_cases.synthesize_speech import SynthesizeSpeechUseCase
 from api.schemas import SynthesizeRequest, TranscribeResponse
 from domain.errors import DomainError, DomainValidationError, ProviderError
 
+# Domain use cases injected from the container.
 
 from application.use_cases.chat import ChatUseCase
 from api.schemas import SynthesizeRequest, TranscribeResponse, ChatRequest, ChatResponse
+
 
 UseCaseProvider = Callable[[], TranscribeAudioUseCase] | TranscribeAudioUseCase
 UseCaseProviderTts = Callable[[], SynthesizeSpeechUseCase] | SynthesizeSpeechUseCase
@@ -17,6 +19,7 @@ UseCaseProviderChat = Callable[[], ChatUseCase] | ChatUseCase
 
 
 def _error_detail(code: str, message: str, request_id: str | None) -> dict:
+    # Standard error payload returned by all endpoints.
     return {
         "error": {
             "code": code,
@@ -27,9 +30,11 @@ def _error_detail(code: str, message: str, request_id: str | None) -> dict:
 
 
 def create_chat_router(chat_use_case_provider: UseCaseProviderChat) -> APIRouter:
+    # Router for chat interactions.
     router = APIRouter(prefix="/chat", tags=["chat"])
 
     def _resolve_chat_use_case() -> ChatUseCase:
+        # Accept direct instance or lazy provider.
         return chat_use_case_provider() if callable(chat_use_case_provider) else chat_use_case_provider
 
     @router.post("", response_model=ChatResponse)
@@ -38,6 +43,7 @@ def create_chat_router(chat_use_case_provider: UseCaseProviderChat) -> APIRouter
         x_request_id: str | None = Header(None, alias="X-Request-Id"),
     ) -> ChatResponse:
         try:
+            # Run the chat use case and return plain text output.
             response_text = await _resolve_chat_use_case().execute(
                 session_id=request.session_id,
                 text=request.text,
@@ -57,15 +63,19 @@ def create_voice_router(
     synthesize_use_case_provider: UseCaseProviderTts,
     readiness_provider: Callable[[], dict] | None = None,
 ) -> APIRouter:
+    # Router for STT/TTS endpoints.
     router = APIRouter(prefix="/voice", tags=["voice"])
 
     def _resolve_transcribe_use_case() -> TranscribeAudioUseCase:
+        # Accept direct instance or lazy provider.
         return transcribe_use_case_provider() if callable(transcribe_use_case_provider) else transcribe_use_case_provider
 
     def _resolve_synthesize_use_case() -> SynthesizeSpeechUseCase:
+        # Accept direct instance or lazy provider.
         return synthesize_use_case_provider() if callable(synthesize_use_case_provider) else synthesize_use_case_provider
 
     def _validation_status(message: str) -> int:
+        # Map known validation messages to HTTP status codes.
         normalized = message.lower()
         if "exceeds maximum size" in normalized or "too large" in normalized:
             return 413
@@ -82,6 +92,7 @@ def create_voice_router(
         x_request_id: str | None = Header(None, alias="X-Request-Id"),
     ) -> TranscribeResponse:
         try:
+            # Build input DTO from multipart request data.
             body = await file.read()
             input_dto = TranscribeAudioInputDTO(
                 audio_bytes=body,
@@ -120,6 +131,7 @@ def create_voice_router(
         x_request_id: str | None = Header(None, alias="X-Request-Id"),
     ) -> Response:
         try:
+            # Build input DTO from JSON payload.
             input_dto = SynthesizeSpeechInputDTO(
                 text=request.text,
                 voice=request.voice,
@@ -128,6 +140,7 @@ def create_voice_router(
                 speed=request.speed,
             )
             output = _resolve_synthesize_use_case().execute(input_dto)
+            # Expose suggested filename and optional duration metadata.
             headers = {
                 "Content-Disposition": f'inline; filename="speech.{output.format}"',
             }

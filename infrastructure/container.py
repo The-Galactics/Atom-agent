@@ -20,6 +20,7 @@ from infrastructure.provider_clients import KokoroClient
 
 @dataclass
 class AppContainer:
+    # Central dependency graph shared by the API layer.
     settings: Settings
     kokoro_client: KokoroClient
     stt_adapter: FasterWhisperAdapter
@@ -33,9 +34,11 @@ class AppContainer:
     chat_use_case: ChatUseCase
 
     def shutdown(self) -> None:
+        # Shutdown hooks for long-lived adapters.
         self.stt_adapter.shutdown()
 
     def readiness(self) -> dict:
+        # Build a provider readiness snapshot for health checks.
         return {
             "status": "ok",
             "providers": {
@@ -59,6 +62,7 @@ class AppContainer:
 
 
 def build_container(settings: Settings) -> AppContainer:
+    # Create providers, adapters, graph nodes, and use cases.
     kokoro_client = KokoroClient(
         endpoint=settings.kokoro_endpoint,
         api_key=settings.kokoro_api_key,
@@ -78,8 +82,8 @@ def build_container(settings: Settings) -> AppContainer:
         default_voice=settings.kokoro_default_voice,
         default_format=AudioFormat.from_string(settings.default_audio_format),
     )
-    
-    # Sprint 2/3 Components (Refactored to Gemini)
+
+    # LLM and memory components used by the chat flow.
     llm_adapter = GeminiAdapter(
         api_key=settings.google_api_key or "",
         model=settings.llm_model,
@@ -95,11 +99,11 @@ def build_container(settings: Settings) -> AppContainer:
         embedding_port=embedding_adapter,
     )
     history_adapter = InMemoryHistoryAdapter()
-    
+
     nodes = GraphNodes(llm_adapter, vector_store)
     graph = build_graph(nodes)
-    
-    # Use Cases
+
+    # Application use cases exposed to controllers.
     transcribe_use_case = TranscribeAudioUseCase(
         stt_port=stt_adapter,
         max_audio_payload_bytes=settings.max_audio_payload_bytes,

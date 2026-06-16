@@ -8,6 +8,7 @@ except ImportError:  # pragma: no cover
 
 
 class Settings(BaseSettings):
+    # Runtime settings loaded from environment variables.
     faster_whisper_model: str = Field("small", env="FASTER_WHISPER_MODEL")
     faster_whisper_device: str = Field("cpu", env="FASTER_WHISPER_DEVICE")
     faster_whisper_compute_type: str = Field("int8", env="FASTER_WHISPER_COMPUTE_TYPE")
@@ -39,4 +40,5 @@ class Settings(BaseSettings):
 
 @lru_cache()
 def get_settings() -> Settings:
+    # Cache settings to avoid re-reading env on each request.
     return Settings()

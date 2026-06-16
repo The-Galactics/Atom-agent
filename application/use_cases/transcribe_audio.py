@@ -17,6 +17,7 @@ ALLOWED_MIME_TYPES = {
 
 
 class TranscribeAudioUseCase:
+    # Validates input audio and delegates transcription to STT port.
     def __init__(
         self,
         stt_port: SpeechToTextPort,
@@ -26,6 +27,7 @@ class TranscribeAudioUseCase:
         self._max_audio_payload_bytes = max_audio_payload_bytes
 
     def execute(self, input_dto: TranscribeAudioInputDTO) -> TranscribeAudioOutputDTO:
+        # Validate payload before calling external provider.
         if not input_dto.audio_bytes:
             raise DomainValidationError("Audio payload cannot be empty.")
 
@@ -41,6 +43,7 @@ class TranscribeAudioUseCase:
             raise DomainValidationError("Beam size must be between 1 and 10.")
 
         try:
+            # Build domain value objects from DTO values.
             language = Language(input_dto.language) if input_dto.language else None
             audio_payload = AudioPayload(
                 data=input_dto.audio_bytes,
@@ -58,6 +61,7 @@ class TranscribeAudioUseCase:
             beam_size=input_dto.beam_size,
         )
 
+        # Map domain model into output DTO.
         return TranscribeAudioOutputDTO(
             text=transcription.text,
             language=transcription.language,

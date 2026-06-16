@@ -12,6 +12,7 @@ logger = logging.getLogger("voice_module")
 
 
 def configure_logging() -> None:
+    # Global log format for local and container runs.
     logging.basicConfig(
         level=logging.INFO,
         format="%(asctime)s %(levelname)s %(name)s %(message)s",
@@ -22,6 +23,7 @@ async def request_logging_middleware(
     request: Request,
     call_next: Callable[[Request], Awaitable[Response]],
 ) -> Response:
+    # Attach request id and log completion metrics.
     request_id = request.headers.get("X-Request-Id") or str(uuid.uuid4())
     start = time.perf_counter()
     try:

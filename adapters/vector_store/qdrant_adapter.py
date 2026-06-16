@@ -8,6 +8,7 @@ from ports.vector_store_port import VectorStorePort
 
 
 class QdrantAdapter(VectorStorePort):
+    # Vector-store adapter for semantic memory operations.
     def __init__(
         self,
         url: str,
@@ -21,6 +22,7 @@ class QdrantAdapter(VectorStorePort):
         self._ensure_collection()
 
     def _ensure_collection(self):
+        # Verify the collection exists and has the expected vector dimension.
         try:
             collection_info = self.client.get_collection(self.collection_name)
             current_size = collection_info.config.params.vectors.size
@@ -42,6 +44,7 @@ class QdrantAdapter(VectorStorePort):
         )
 
     async def store(self, content: str, metadata: dict) -> None:
+        # Embed content and upsert as a single Qdrant point.
         vector = self.embedding_port.embed_text(content)
         # Generate a deterministic UUID based on the content
         point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, content + str(metadata)))
@@ -59,6 +62,7 @@ class QdrantAdapter(VectorStorePort):
     async def search(
         self, query: str, limit: int = 5, score_threshold: float = 0.5
     ) -> list[MemoryEntry]:
+        # Embed query and return mapped memory entries.
         vector = self.embedding_port.embed_text(query)
         results = self.client.query_points(
             collection_name=self.collection_name,

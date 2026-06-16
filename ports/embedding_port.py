@@ -2,6 +2,7 @@ from abc import ABC, abstractmethod
 
 
 class EmbeddingPort(ABC):
+    # Contract for text/document embedding providers.
     @abstractmethod
     def embed_text(self, text: str) -> list[float]:
         """Generates an embedding vector for the given text."""

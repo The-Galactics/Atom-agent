@@ -5,6 +5,7 @@ from domain.voice.models import Transcription
 
 
 class SpeechToTextPort(ABC):
+    # Contract for speech-to-text providers.
     @abstractmethod
     def transcribe(
         self,
