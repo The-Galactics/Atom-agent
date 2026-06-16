@@ -1,4 +1,6 @@
 import asyncio
+from contextlib import asynccontextmanager
+
 from fastapi import FastAPI, Response
 
 from api.controllers import create_voice_router, create_chat_router
@@ -10,25 +12,35 @@ from infrastructure.grpc.server import serve as start_grpc_server
 
 configure_logging()
 
-app = FastAPI(title="Atom Agent", version="0.2.0")
-app.middleware("http")(request_logging_middleware)
 
-
-@app.on_event("startup")
-async def startup_event() -> None:
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- Startup ---
     settings = get_settings()
     container = build_container(settings)
     app.state.voice_container = container
-    
-    # Start gRPC server in a background task
-    asyncio.create_task(start_grpc_server(container))
+
+    # Start gRPC server in a background task (listens on :50051 by default)
+    grpc_task = asyncio.create_task(
+        start_grpc_server(container, port=getattr(settings, "grpc_port", 50051))
+    )
     print("gRPC server background task created")
 
+    try:
+        yield
+    finally:
+        # --- Shutdown ---
+        grpc_task.cancel()
+        try:
+            await grpc_task
+        except asyncio.CancelledError:
+            pass
+        if hasattr(app.state, "voice_container"):
+            app.state.voice_container.shutdown()
 
-@app.on_event("shutdown")
-def shutdown_event() -> None:
-    if hasattr(app.state, "voice_container"):
-        app.state.voice_container.shutdown()
+
+app = FastAPI(title="Atom Agent", version="0.2.0", lifespan=lifespan)
+app.middleware("http")(request_logging_middleware)
 
 
 @app.get("/health")
@@ -69,3 +81,14 @@ app.include_router(
         chat_use_case_provider=lambda: _container().chat_use_case,
     )
 )
+
+
+if __name__ == "__main__":
+    import uvicorn
+
+    settings = get_settings()
+    host = getattr(settings, "http_host", "0.0.0.0")
+    port = getattr(settings, "http_port", 8000)
+    # Run the app object directly so reload is off and the gRPC background
+    # task (started in `lifespan`) comes up alongside the HTTP server.
+    uvicorn.run(app, host=host, port=port)
