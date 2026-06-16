@@ -3,6 +3,7 @@ from domain.conversation.models import ChatMessage
 
 
 class HistoryPort(ABC):
+    # Contract for per-session chat history storage.
     @abstractmethod
     def get_history(self, session_id: str) -> list[ChatMessage]:
         """Retrieves the conversation history for a session."""

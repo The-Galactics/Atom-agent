@@ -6,16 +6,19 @@ from ports.audio_port import AudioStoragePort
 
 
 class InMemoryAudioStorageAdapter(AudioStoragePort):
+    # Simple volatile audio storage for local runs/tests.
     def __init__(self) -> None:
         self._items: dict[str, AudioPayload] = {}
 
     def save(self, key: str, audio: AudioPayload) -> str:
+        # Validate key and store payload in memory.
         if not key or not key.strip():
             raise DomainValidationError("Audio storage key cannot be empty.")
         self._items[key] = audio
         return key
 
     def load(self, key: str) -> AudioPayload:
+        # Return payload or raise a domain validation error.
         try:
             return self._items[key]
         except KeyError as exc:

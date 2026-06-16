@@ -9,6 +9,7 @@ from domain.errors import ProviderError
 
 @dataclass(frozen=True)
 class KokoroClientConfig:
+    # Immutable HTTP client configuration.
     endpoint: str
     api_key: str | None = None
     timeout_seconds: int = 30
@@ -18,6 +19,7 @@ class KokoroClientConfig:
 
 
 class KokoroClient:
+    # Simple HTTP client for the TTS provider (Kokoro).
     def __init__(
         self,
         endpoint: str,
@@ -45,6 +47,7 @@ class KokoroClient:
         language: str | None = None,
         speed: float = 1.0,
     ) -> bytes:
+        # Send synthesis request and return raw audio bytes.
         # Kokoro FastAPI deployments commonly expose an OpenAI-compatible
         # /v1/audio/speech endpoint. KOKORO_ENDPOINT should point to that full URL.
         payload = {
@@ -64,6 +67,7 @@ class KokoroClient:
             headers["Authorization"] = f"Bearer {self._config.api_key}"
 
         last_error: Exception | None = None
+        # Retry transient HTTP errors with exponential backoff.
         for attempt in range(self._config.max_retries + 1):
             try:
                 response = self._session.post(
@@ -85,6 +89,7 @@ class KokoroClient:
         raise ProviderError(f"Kokoro HTTP request failed: {last_error}") from last_error
 
     def health(self) -> bool:
+        # Lightweight provider availability probe.
         try:
             response = self._session.get(
                 self._config.endpoint,

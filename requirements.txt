@@ -10,10 +10,10 @@ httpx>=0.26.0
 # Sprint 2: LLM & Memory
 langchain>=0.1.0
 langgraph>=0.0.1
-langchain-nvidia-ai-endpoints>=0.1.0
-qdrant-client>=1.7.0
-sentence-transformers>=2.3.0
+langchain-google-genai
+qdrant-client
+langgraph
 langchain-community>=0.0.10
 
 # Optional provider libraries
-# faster-whisper>=0.8.0
+faster-whisper>=0.8.0

@@ -8,6 +8,7 @@ from ports.vector_store_port import VectorStorePort
 
 
 class QdrantAdapter(VectorStorePort):
+    # Vector-store adapter for semantic memory operations.
     def __init__(
         self,
         url: str,
@@ -21,18 +22,29 @@ class QdrantAdapter(VectorStorePort):
         self._ensure_collection()
 
     def _ensure_collection(self):
-        collections = self.client.get_collections().collections
-        exists = any(c.name == self.collection_name for c in collections)
-        if not exists:
-            # BGE-M3 has 1024 dimensions
-            self.client.create_collection(
-                collection_name=self.collection_name,
-                vectors_config=rest.VectorParams(
-                    size=1024, distance=rest.Distance.COSINE
-                ),
-            )
+        # Verify the collection exists and has the expected vector dimension.
+        try:
+            collection_info = self.client.get_collection(self.collection_name)
+            current_size = collection_info.config.params.vectors.size
+            if current_size != 3072:
+                print(f"Dimension mismatch (expected 3072, got {current_size}). Recreating collection...")
+                self.client.delete_collection(self.collection_name)
+                self._create_collection()
+        except Exception:
+            # Collection does not exist
+            self._create_collection()
+
+    def _create_collection(self):
+        # gemini-embedding-2 has 3072 dimensions
+        self.client.create_collection(
+            collection_name=self.collection_name,
+            vectors_config=rest.VectorParams(
+                size=3072, distance=rest.Distance.COSINE
+            ),
+        )
 
     async def store(self, content: str, metadata: dict) -> None:
+        # Embed content and upsert as a single Qdrant point.
         vector = self.embedding_port.embed_text(content)
         # Generate a deterministic UUID based on the content
         point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, content + str(metadata)))
@@ -50,6 +62,7 @@ class QdrantAdapter(VectorStorePort):
     async def search(
         self, query: str, limit: int = 5, score_threshold: float = 0.5
     ) -> list[MemoryEntry]:
+        # Embed query and return mapped memory entries.
         vector = self.embedding_port.embed_text(query)
         results = self.client.query_points(
             collection_name=self.collection_name,

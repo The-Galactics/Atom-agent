@@ -6,19 +6,23 @@ from infrastructure.container import build_container
 from infrastructure.logging import configure_logging, request_logging_middleware
 
 
+# Configure global logging before app startup.
 configure_logging()
 
+# Main FastAPI application object.
 app = FastAPI(title="Atom Agent", version="0.2.0")
 app.middleware("http")(request_logging_middleware)
 
 
 @app.on_event("startup")
 def startup_event() -> None:
+    # Build and store the dependency container once.
     app.state.voice_container = build_container(get_settings())
 
 
 @app.on_event("shutdown")
 def shutdown_event() -> None:
+    # Release provider resources on service shutdown.
     if hasattr(app.state, "voice_container"):
         app.state.voice_container.shutdown()
 
@@ -45,6 +49,7 @@ async def favicon() -> Response:
 
 
 def _container():
+    # Local helper to access the initialized container.
     return app.state.voice_container
 
 

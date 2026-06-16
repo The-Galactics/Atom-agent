@@ -5,6 +5,7 @@ from application.dtos import SynthesizeSpeechInputDTO, SynthesizeSpeechOutputDTO
 
 
 class SynthesizeSpeechUseCase:
+    # Validates text input and delegates synthesis to TTS port.
     def __init__(
         self,
         tts_port: TextToSpeechPort,
@@ -16,6 +17,7 @@ class SynthesizeSpeechUseCase:
         self._default_language = default_language
 
     def execute(self, input_dto: SynthesizeSpeechInputDTO) -> SynthesizeSpeechOutputDTO:
+        # Validate text and speed constraints.
         if not input_dto.text or not input_dto.text.strip():
             raise DomainValidationError("Text cannot be empty.")
 
@@ -30,6 +32,7 @@ class SynthesizeSpeechUseCase:
             raise DomainValidationError("Speech speed must be between 0.75 and 1.25.")
 
         try:
+            # Build validated domain values from DTO values.
             audio_format = AudioFormat.from_string(input_dto.audio_format)
             language = Language(input_dto.language or self._default_language)
         except ValueError as exc:
@@ -43,6 +46,7 @@ class SynthesizeSpeechUseCase:
             speed=input_dto.speed,
         )
 
+        # Map domain model into output DTO.
         return SynthesizeSpeechOutputDTO(
             audio_bytes=synthesis.audio_bytes,
             mime_type=synthesis.mime_type,

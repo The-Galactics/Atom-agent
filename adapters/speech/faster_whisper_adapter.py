@@ -14,6 +14,7 @@ except ImportError:  # pragma: no cover
 
 
 class FasterWhisperAdapter(SpeechToTextPort):
+    # Speech-to-text adapter backed by faster-whisper.
     def __init__(
         self,
         model_name: str = "small",
@@ -33,6 +34,7 @@ class FasterWhisperAdapter(SpeechToTextPort):
         format: str | None = None,
         beam_size: int = 5,
     ) -> Transcription:
+        # Persist bytes to disk because the provider expects a file path.
         temp_path = audio.save_to_temp_file()
 
         try:
@@ -43,6 +45,7 @@ class FasterWhisperAdapter(SpeechToTextPort):
             options["beam_size"] = beam_size
 
             with self._semaphore:
+                # Limit concurrent inferences to control CPU/GPU load.
                 segments, info = self._model.transcribe(temp_path, **options)
                 materialized_segments = list(segments)
 
