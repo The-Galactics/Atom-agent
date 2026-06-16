@@ -24,6 +24,11 @@ class Settings(BaseSettings):
     max_tts_text_chars: int = Field(1000, env="MAX_TTS_TEXT_CHARS")
     default_language: str = Field("es", env="DEFAULT_LANGUAGE")
 
+    # Server bind settings (HTTP via uvicorn, gRPC background server).
+    http_host: str = Field("0.0.0.0", env="HTTP_HOST")
+    http_port: int = Field(8000, env="HTTP_PORT")
+    grpc_port: int = Field(50051, env="GRPC_PORT")
+
     # Sprint 2: LLM & Memory
     nvidia_api_key: str | None = Field(None, env="NVIDIA_API_KEY")
     llm_model: str = Field("google/gemma-3n-e4b-it", env="LLM_MODEL")
@@ -31,6 +36,13 @@ class Settings(BaseSettings):
     qdrant_api_key: str | None = Field(None, env="QDRANT_API_KEY")
     qdrant_collection: str = Field("memory", env="QDRANT_COLLECTION")
     embedding_model: str = Field("BAAI/bge-m3", env="EMBEDDING_MODEL")
+
+    # Feature flags for graceful degradation. Both default to True so the
+    # service is production-capable; at runtime, voice further requires the
+    # optional STT/TTS stack to be importable, and memory degrades silently
+    # to LLM-only when Qdrant / embeddings are unavailable.
+    voice_enabled: bool = Field(True, env="VOICE_ENABLED")
+    memory_enabled: bool = Field(True, env="MEMORY_ENABLED")
 
     class Config:
         env_file = ".env"

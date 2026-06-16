@@ -16,7 +16,7 @@ sentence-transformers>=2.3.0
 langchain-community>=0.0.10
 
 # Optional provider libraries
-# faster-whisper>=0.8.0
+faster-whisper>=0.8.0
 
 #Grpc dependencies
 grpcio==1.81.1
