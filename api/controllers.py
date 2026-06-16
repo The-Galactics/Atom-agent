@@ -79,6 +79,16 @@ def create_voice_router(
         beam_size: int = Form(5),
         x_request_id: str | None = Header(None, alias="X-Request-Id"),
     ) -> TranscribeResponse:
+        use_case = _resolve_transcribe_use_case()
+        if use_case is None:
+            raise HTTPException(
+                status_code=503,
+                detail=_error_detail(
+                    "STT_PROVIDER_UNAVAILABLE",
+                    "Voice provider unavailable (STT).",
+                    x_request_id,
+                ),
+            )
         try:
             body = await file.read()
             input_dto = TranscribeAudioInputDTO(
@@ -88,7 +98,7 @@ def create_voice_router(
                 file_format=format,
                 beam_size=beam_size,
             )
-            output = _resolve_transcribe_use_case().execute(input_dto)
+            output = use_case.execute(input_dto)
             return TranscribeResponse(**output.__dict__)
         except ValidationError as exc:
             raise HTTPException(
@@ -117,6 +127,16 @@ def create_voice_router(
         request: SynthesizeRequest,
         x_request_id: str | None = Header(None, alias="X-Request-Id"),
     ) -> Response:
+        use_case = _resolve_synthesize_use_case()
+        if use_case is None:
+            raise HTTPException(
+                status_code=503,
+                detail=_error_detail(
+                    "TTS_PROVIDER_UNAVAILABLE",
+                    "Voice provider unavailable (TTS).",
+                    x_request_id,
+                ),
+            )
         try:
             input_dto = SynthesizeSpeechInputDTO(
                 text=request.text,
@@ -125,7 +145,7 @@ def create_voice_router(
                 language=request.language,
                 speed=request.speed,
             )
-            output = _resolve_synthesize_use_case().execute(input_dto)
+            output = use_case.execute(input_dto)
             headers = {
                 "Content-Disposition": f'inline; filename="speech.{output.format}"',
             }
