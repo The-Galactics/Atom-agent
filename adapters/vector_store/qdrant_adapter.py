@@ -21,16 +21,25 @@ class QdrantAdapter(VectorStorePort):
         self._ensure_collection()
 
     def _ensure_collection(self):
-        collections = self.client.get_collections().collections
-        exists = any(c.name == self.collection_name for c in collections)
-        if not exists:
-            # BGE-M3 has 1024 dimensions
-            self.client.create_collection(
-                collection_name=self.collection_name,
-                vectors_config=rest.VectorParams(
-                    size=1024, distance=rest.Distance.COSINE
-                ),
-            )
+        try:
+            collection_info = self.client.get_collection(self.collection_name)
+            current_size = collection_info.config.params.vectors.size
+            if current_size != 3072:
+                print(f"Dimension mismatch (expected 3072, got {current_size}). Recreating collection...")
+                self.client.delete_collection(self.collection_name)
+                self._create_collection()
+        except Exception:
+            # Collection does not exist
+            self._create_collection()
+
+    def _create_collection(self):
+        # gemini-embedding-2 has 3072 dimensions
+        self.client.create_collection(
+            collection_name=self.collection_name,
+            vectors_config=rest.VectorParams(
+                size=3072, distance=rest.Distance.COSINE
+            ),
+        )
 
     async def store(self, content: str, metadata: dict) -> None:
         vector = self.embedding_port.embed_text(content)

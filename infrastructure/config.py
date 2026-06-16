@@ -24,13 +24,13 @@ class Settings(BaseSettings):
     max_tts_text_chars: int = Field(1000, env="MAX_TTS_TEXT_CHARS")
     default_language: str = Field("es", env="DEFAULT_LANGUAGE")
 
-    # Sprint 2: LLM & Memory
-    nvidia_api_key: str | None = Field(None, env="NVIDIA_API_KEY")
-    llm_model: str = Field("google/gemma-3n-e4b-it", env="LLM_MODEL")
+    # Sprint 2/3: LLM & Memory
+    google_api_key: str | None = Field(None, env="GOOGLE_API_KEY")
+    llm_model: str = Field("gemini-1.5-flash", env="LLM_MODEL")
     qdrant_url: str = Field("http://localhost:6333", env="QDRANT_URL")
     qdrant_api_key: str | None = Field(None, env="QDRANT_API_KEY")
     qdrant_collection: str = Field("memory", env="QDRANT_COLLECTION")
-    embedding_model: str = Field("BAAI/bge-m3", env="EMBEDDING_MODEL")
+    embedding_model: str = Field("models/embedding-001", env="EMBEDDING_MODEL")
 
     class Config:
         env_file = ".env"

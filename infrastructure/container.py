@@ -4,10 +4,10 @@ from dataclasses import dataclass
 
 from adapters.speech.faster_whisper_adapter import FasterWhisperAdapter
 from adapters.speech.kokoro_adapter import KokoroAdapter
-from adapters.llm.nvidia_gemma_adapter import NvidiaGemmaAdapter
+from adapters.llm.gemini_adapter import GeminiAdapter
+from adapters.embeddings.gemini_embedding_adapter import GeminiEmbeddingAdapter
 from adapters.vector_store.qdrant_adapter import QdrantAdapter
 from adapters.history.in_memory_history_adapter import InMemoryHistoryAdapter
-from adapters.embeddings.bge_m3_adapter import BGEM3Adapter
 from application.agents.nodes import GraphNodes
 from application.agents.graph import build_graph
 from application.use_cases.chat import ChatUseCase
@@ -24,9 +24,9 @@ class AppContainer:
     kokoro_client: KokoroClient
     stt_adapter: FasterWhisperAdapter
     tts_adapter: KokoroAdapter
-    llm_adapter: NvidiaGemmaAdapter
+    llm_adapter: GeminiAdapter
     vector_store: QdrantAdapter
-    embedding_adapter: BGEM3Adapter
+    embedding_adapter: GeminiEmbeddingAdapter
     history_adapter: InMemoryHistoryAdapter
     transcribe_use_case: TranscribeAudioUseCase
     synthesize_use_case: SynthesizeSpeechUseCase
@@ -45,8 +45,8 @@ class AppContainer:
                     "model": self.settings.faster_whisper_model,
                 },
                 "llm": {
-                    "status": "ready" if self.settings.nvidia_api_key else "missing_key",
-                    "provider": "nvidia/gemma",
+                    "status": "ready" if self.settings.google_api_key else "missing_key",
+                    "provider": "google/gemini",
                     "model": self.settings.llm_model,
                 },
                 "vector_store": {
@@ -79,13 +79,14 @@ def build_container(settings: Settings) -> AppContainer:
         default_format=AudioFormat.from_string(settings.default_audio_format),
     )
     
-    # Sprint 2 Components (Refactored)
-    llm_adapter = NvidiaGemmaAdapter(
-        api_key=settings.nvidia_api_key or "",
+    # Sprint 2/3 Components (Refactored to Gemini)
+    llm_adapter = GeminiAdapter(
+        api_key=settings.google_api_key or "",
         model=settings.llm_model,
     )
-    embedding_adapter = BGEM3Adapter(
-        model_name=settings.embedding_model,
+    embedding_adapter = GeminiEmbeddingAdapter(
+        api_key=settings.google_api_key or "",
+        model=settings.embedding_model,
     )
     vector_store = QdrantAdapter(
         url=settings.qdrant_url,

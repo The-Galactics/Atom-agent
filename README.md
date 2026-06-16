@@ -4,9 +4,9 @@ Atom Agent is a high-performance conversational intelligence layer designed for 
 
 ## 🚀 Features
 
-- **Conversational Intelligence:** Powered by **Google Gemma** (via NVIDIA NIM).
+- **Conversational Intelligence:** Powered by **Google Gemini 1.5 Flash**.
 - **Orchestration:** Complex flows managed by **LangGraph**.
-- **Semantic Memory:** **Qdrant** integration with **BGE-m3** embeddings for context-aware responses.
+- **Semantic Memory:** **Qdrant** integration with **Gemini text-embedding-004** (768 dimensions).
 - **Voice Capabilities:**
   - **STT:** Faster Whisper for high-accuracy speech-to-text.
   - **TTS:** Kokoro for premium, natural-sounding synthesis.
@@ -27,19 +27,21 @@ Atom Agent is a high-performance conversational intelligence layer designed for 
 
 - Python 3.10+
 - Docker & Docker Compose
-- NVIDIA API Key (for Gemma)
+- Google API Key (for Gemini)
 
 ## ⚙️ Configuration
 
-Create a `.env` file based on `.env.example`:
+Create a `.env` file based on the following template:
 
 ```env
-# LLM & Memory
-NVIDIA_API_KEY=your_key_here
-LLM_MODEL=google/gemma-3n-e4b-it
+# Google Gemini
+GOOGLE_API_KEY=your_google_key_here
+LLM_MODEL=gemini-1.5-flash
+EMBEDDING_MODEL=models/text-embedding-004
+
+# Qdrant
 QDRANT_URL=http://localhost:6333
 QDRANT_COLLECTION=memory
-EMBEDDING_MODEL=BAAI/bge-m3
 
 # Voice
 KOKORO_ENDPOINT=http://localhost:8880/v1/audio/speech
