@@ -51,3 +51,19 @@ class ChatInputDTO:
 class ChatOutputDTO:
     text: str
     session_id: str
+
+
+@dataclass
+class ExecuteCommandInputDTO:
+    text: str
+    user_id: str = "default"
+
+
+@dataclass
+class ExecuteCommandOutputDTO:
+    success: bool
+    reply_text: str
+    action_type: str
+    parameters: dict
+    confidence: float = 0.0
+    requires_confirmation: bool = False
