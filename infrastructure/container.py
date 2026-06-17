@@ -13,6 +13,7 @@ from adapters.history.in_memory_history_adapter import InMemoryHistoryAdapter
 from application.agents.nodes import GraphNodes
 from application.agents.graph import build_graph
 from application.use_cases.chat import ChatUseCase
+from application.use_cases.execute_command import ExecuteCommandUseCase
 from application.use_cases.synthesize_speech import SynthesizeSpeechUseCase
 from application.use_cases.transcribe_audio import TranscribeAudioUseCase
 from domain.value_objects import AudioFormat
@@ -36,8 +37,12 @@ class AppContainer:
     transcribe_use_case: Optional[TranscribeAudioUseCase]
     synthesize_use_case: Optional[SynthesizeSpeechUseCase]
     chat_use_case: ChatUseCase
+    # Order/intent path. None when the function-calling stack is unavailable.
+    execute_command_use_case: Optional[ExecuteCommandUseCase] = None
     # Human-readable reason voice is unavailable, when applicable.
     voice_status: str = "ready"
+    # Human-readable reason the intent stack is unavailable, when applicable.
+    intent_status: str = "ready"
 
     def shutdown(self) -> None:
         if self.stt_adapter is not None:
@@ -68,6 +73,11 @@ class AppContainer:
                     "status": "ready" if self.settings.google_api_key else "missing_key",
                     "provider": "google/gemini",
                     "model": self.settings.llm_model,
+                },
+                "intent": {
+                    "status": "ready" if self.execute_command_use_case is not None else "unavailable",
+                    "provider": "google/gemini-function-calling",
+                    "detail": None if self.execute_command_use_case is not None else self.intent_status,
                 },
                 "vector_store": {
                     # Lazy + degrade-on-failure: reported "configured" since
@@ -132,12 +142,34 @@ def _build_voice_adapters(settings: Settings):
     return kokoro_client, stt_adapter, tts_adapter, status
 
 
+def _build_intent_use_case(settings: Settings):
+    """Construct the order/intent use case defensively.
+
+    Returns (use_case, status). ``use_case`` is ``None`` when the function-
+    calling provider can't be built (missing ``langchain-google-genai``,
+    absent API key, etc.), so the order endpoint degrades gracefully.
+    """
+    if not settings.google_api_key:
+        return None, "intent provider unavailable: GOOGLE_API_KEY not set"
+    try:
+        from adapters.intent.gemini_function_calling_adapter import (
+            GeminiFunctionCallingAdapter,
+        )
+
+        recognizer = GeminiFunctionCallingAdapter(
+            api_key=settings.google_api_key,
+            model=settings.llm_model,
+        )
+        return ExecuteCommandUseCase(intent_recognizer=recognizer), "ready"
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("intent_init_failed error=%s", exc)
+        return None, f"intent provider unavailable: {exc}"
+
+
 def build_container(settings: Settings) -> AppContainer:
     kokoro_client, stt_adapter, tts_adapter, voice_status = _build_voice_adapters(settings)
 
-    # Sprint 2 Components (Refactored). These construct cheaply now: the
-    # embedding model and Qdrant connection are both lazy (loaded on first
-    # use), so an unreachable Qdrant or undownloaded model never blocks boot.
+    # Cheap to construct: embedding model and Qdrant are lazy (loaded on first use).
     llm_adapter = GeminiAdapter(
         api_key=settings.google_api_key or "",
         model=settings.llm_model,
@@ -180,8 +212,13 @@ def build_container(settings: Settings) -> AppContainer:
         history_adapter=history_adapter,
     )
 
+    # Built defensively: degrades to UNAVAILABLE if the provider is misconfigured.
+    execute_command_use_case, intent_status = _build_intent_use_case(settings)
+
     if transcribe_use_case is None or synthesize_use_case is None:
         logger.warning("voice_degraded detail=%s", voice_status)
+    if execute_command_use_case is None:
+        logger.warning("intent_degraded detail=%s", intent_status)
 
     return AppContainer(
         settings=settings,
@@ -195,5 +232,7 @@ def build_container(settings: Settings) -> AppContainer:
         transcribe_use_case=transcribe_use_case,
         synthesize_use_case=synthesize_use_case,
         chat_use_case=chat_use_case,
+        execute_command_use_case=execute_command_use_case,
         voice_status=voice_status,
+        intent_status=intent_status,
     )
