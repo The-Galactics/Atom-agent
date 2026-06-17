@@ -2,6 +2,7 @@ import logging
 
 from langchain_google_genai import ChatGoogleGenerativeAI
 
+from adapters.llm.content import extract_text
 from domain.errors import ProviderError
 from domain.intent.catalog import openai_tools, spec_for_tool
 from domain.intent.models import Action, ActionType, IntentResult
@@ -48,7 +49,7 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
             # Conversational turn: no action, just the model's reply.
             return IntentResult(
                 action=Action(type=ActionType.NONE),
-                reply=str(response.content or ""),
+                reply=extract_text(response.content),
                 confidence=0.0,
                 requires_confirmation=False,
                 raw_text=text,
@@ -63,14 +64,14 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
             logger.warning("intent_unknown_tool session_id=%s tool=%s", session_id, tool_name)
             return IntentResult(
                 action=Action(type=ActionType.NONE),
-                reply=str(response.content or ""),
+                reply=extract_text(response.content),
                 confidence=0.0,
                 raw_text=text,
             )
 
         return IntentResult(
             action=Action(type=spec.type, parameters=dict(args)),
-            reply=str(response.content or ""),
+            reply=extract_text(response.content),
             confidence=1.0,
             requires_confirmation=spec.requires_confirmation,
             raw_text=text,
