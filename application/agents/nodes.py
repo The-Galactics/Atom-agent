@@ -1,6 +1,7 @@
 import logging
 
 from domain.conversation.models import ChatMessage
+from domain.memory.importance import is_memorable
 from application.agents.state import AgentState
 from ports.llm_port import LLMPort
 from ports.vector_store_port import VectorStorePort
@@ -11,10 +12,11 @@ logger = logging.getLogger("voice_module")
 class GraphNodes:
     # LangGraph node implementations for chat orchestration.
     def __init__(self, llm_port: LLMPort, vector_store_port: VectorStorePort,
-                 memory_enabled: bool = True):
+                 memory_enabled: bool = True, memory_min_words: int = 4):
         self.llm = llm_port
         self.vector_store = vector_store_port
         self.memory_enabled = memory_enabled
+        self.memory_min_words = memory_min_words
 
     async def retrieve_memory(self, state: AgentState) -> dict:
         """Retrieves semantic memory based on the user input.
@@ -56,16 +58,19 @@ class GraphNodes:
         return {"response": response, "messages": [user_msg, response]}
 
     async def store_memory(self, state: AgentState) -> dict:
-        """Stores the interaction in the semantic memory."""
-        # Persist a combined user+assistant text into the vector store.
-        content = f"Usuario: {state['input']}\nAtom: {state['response'].content}"
-        await self.vector_store.store(content, {"session_id": state["session_id"]})
         """Stores the interaction in the semantic memory.
 
         Best-effort: failures to persist (Qdrant down, embeddings unavailable)
         are logged and swallowed so the chat turn still succeeds.
         """
+        # Skip entirely when memory is disabled — avoids embedding calls /
+        # hitting Qdrant when no vector store is provisioned.
         if not self.memory_enabled:
+            return {}
+        # #1 Importance filter — don't persist greetings/smalltalk; keep the
+        # vector store small and relevant. Judged on the user's utterance.
+        if not is_memorable(state["input"], self.memory_min_words):
+            logger.info("memory_skip_trivial session_id=%s", state.get("session_id"))
             return {}
         try:
             content = f"Usuario: {state['input']}\nAtom: {state['response'].content}"
