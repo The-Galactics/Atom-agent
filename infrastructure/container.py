@@ -183,10 +183,17 @@ def build_container(settings: Settings) -> AppContainer:
         api_key=settings.qdrant_api_key,
         collection_name=settings.qdrant_collection,
         embedding_port=embedding_adapter,
+        dedup_threshold=settings.memory_dedup_threshold,
+        ttl_days=settings.memory_ttl_days,
+        prune_every=settings.memory_prune_every,
     )
     history_adapter = InMemoryHistoryAdapter()
 
-    nodes = GraphNodes(llm_adapter, vector_store, memory_enabled=settings.memory_enabled)
+    nodes = GraphNodes(
+        llm_adapter, vector_store,
+        memory_enabled=settings.memory_enabled,
+        memory_min_words=settings.memory_min_words,
+    )
     graph = build_graph(nodes)
 
     # Voice use cases only exist when their adapters were constructed.

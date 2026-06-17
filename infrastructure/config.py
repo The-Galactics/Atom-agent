@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     voice_enabled: bool = Field(True, env="VOICE_ENABLED")
     memory_enabled: bool = Field(True, env="MEMORY_ENABLED")
 
+    # Memory hygiene — keep the vector store small, clean and relevant.
+    #   - min_words: importance filter; turns shorter than this (and without a
+    #     fact marker) are NOT persisted (skips greetings/smalltalk).
+    #   - dedup_threshold: cosine similarity above which a new memory is treated
+    #     as a near-duplicate and skipped (1.0 = identical).
+    #   - ttl_days: memories older than this are pruned; 0 disables TTL pruning.
+    #   - prune_every: run TTL pruning once per this many stores (throttle).
+    memory_min_words: int = Field(4, env="MEMORY_MIN_WORDS")
+    memory_dedup_threshold: float = Field(0.95, env="MEMORY_DEDUP_THRESHOLD")
+    memory_ttl_days: int = Field(30, env="MEMORY_TTL_DAYS")
+    memory_prune_every: int = Field(20, env="MEMORY_PRUNE_EVERY")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

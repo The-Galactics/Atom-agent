@@ -1,3 +1,5 @@
+import logging
+import time
 import uuid
 from qdrant_client import QdrantClient
 from qdrant_client.http import models as rest
@@ -5,6 +7,8 @@ from ports.embedding_port import EmbeddingPort
 
 from domain.memory.models import MemoryEntry
 from ports.vector_store_port import VectorStorePort
+
+logger = logging.getLogger("voice_module")
 
 
 class QdrantAdapter(VectorStorePort):
@@ -23,11 +27,20 @@ class QdrantAdapter(VectorStorePort):
         api_key: str | None,
         collection_name: str,
         embedding_port: EmbeddingPort,
+        dedup_threshold: float = 0.95,
+        ttl_days: int = 30,
+        prune_every: int = 20,
     ):
         self.url = url
         self.api_key = api_key
         self.collection_name = collection_name
         self.embedding_port = embedding_port
+        # Memory-hygiene knobs (see Settings). dedup_threshold >= 1.0 disables
+        # dedup; ttl_days <= 0 disables TTL pruning.
+        self.dedup_threshold = dedup_threshold
+        self.ttl_seconds = ttl_days * 86400 if ttl_days and ttl_days > 0 else 0
+        self.prune_every = max(1, prune_every)
+        self._store_count = 0
         self._client: QdrantClient | None = None
 
     @property
@@ -58,11 +71,26 @@ class QdrantAdapter(VectorStorePort):
                 size=3072, distance=rest.Distance.COSINE
             ),
         )
+        # Index created_at so TTL pruning (delete-by-range) stays efficient.
+        try:
+            self.client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="created_at",
+                field_schema=rest.PayloadSchemaType.INTEGER,
+            )
+        except Exception as exc:  # non-fatal: pruning still works without it
+            logger.warning("qdrant_index_failed error=%s", exc)
 
     async def store(self, content: str, metadata: dict) -> None:
-        # Embed content and upsert as a single Qdrant point.
+        # Embed content once; reuse the vector for dedup and upsert.
         vector = self.embedding_port.embed_text(content)
-        # Generate a deterministic UUID based on the content
+
+        # #2 Dedup: skip storing a near-duplicate of an existing memory.
+        if self.dedup_threshold < 1.0 and self._is_duplicate(vector):
+            logger.info("memory_dedup_skipped session_id=%s", metadata.get("session_id"))
+            return
+
+        # Deterministic id on content+session so exact repeats collapse on upsert.
         point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, content + str(metadata)))
         self.client.upsert(
             collection_name=self.collection_name,
@@ -70,10 +98,46 @@ class QdrantAdapter(VectorStorePort):
                 rest.PointStruct(
                     id=point_id,
                     vector=vector,
-                    payload={"content": content, **metadata},
+                    payload={"content": content, "created_at": int(time.time()), **metadata},
                 )
             ],
         )
+
+        # #3 TTL: prune expired memories every `prune_every` stores (throttled).
+        self._store_count += 1
+        if self.ttl_seconds > 0 and self._store_count % self.prune_every == 0:
+            self._prune_expired()
+
+    def _is_duplicate(self, vector: list[float]) -> bool:
+        # A near-duplicate exists if the closest point clears the dedup threshold.
+        try:
+            hits = self.client.query_points(
+                collection_name=self.collection_name,
+                query=vector,
+                limit=1,
+                score_threshold=self.dedup_threshold,
+            ).points
+            return bool(hits)
+        except Exception:
+            return False
+
+    def _prune_expired(self) -> None:
+        # Delete memories older than the TTL window.
+        cutoff = int(time.time()) - self.ttl_seconds
+        try:
+            self.client.delete(
+                collection_name=self.collection_name,
+                points_selector=rest.FilterSelector(
+                    filter=rest.Filter(
+                        must=[rest.FieldCondition(
+                            key="created_at", range=rest.Range(lt=cutoff)
+                        )]
+                    )
+                ),
+            )
+            logger.info("memory_pruned cutoff=%s", cutoff)
+        except Exception as exc:
+            logger.warning("memory_prune_failed error=%s", exc)
 
     async def search(
         self, query: str, limit: int = 5, score_threshold: float = 0.5
