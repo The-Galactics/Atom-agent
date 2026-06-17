@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16proto/atom_agent.proto\x12\x0e\x63om.atom.proto\"2\n\x0e\x43ommandRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x0f\n\x07\x63ommand\x18\x02 \x01(\t\"7\n\x0f\x43ommandResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x13\n\x0bout_message\x18\x02 \x01(\t\"C\n\x0eMessageRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x0f\n\x07\x63hat_id\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\"I\n\x0fMessageResponse\x12\x14\n\x0cscript_token\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x10\n\x08\x66inished\x18\x03 \x01(\x08\"p\n\x11TranscribeRequest\x12\x13\n\x0b\x61udio_bytes\x18\x01 \x01(\x0c\x12\x11\n\tmime_type\x18\x02 \x01(\t\x12\x10\n\x08language\x18\x03 \x01(\t\x12\x0e\n\x06\x66ormat\x18\x04 \x01(\t\x12\x11\n\tbeam_size\x18\x05 \x01(\x05\"t\n\x12TranscribeResponse\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x10\n\x08language\x18\x02 \x01(\t\x12\x18\n\x10\x64uration_seconds\x18\x03 \x01(\x02\x12\x12\n\nconfidence\x18\x04 \x01(\x02\x12\x10\n\x08provider\x18\x05 \x01(\t\"a\n\x11SynthesizeRequest\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\r\n\x05voice\x18\x02 \x01(\t\x12\x10\n\x08language\x18\x03 \x01(\t\x12\x0e\n\x06\x66ormat\x18\x04 \x01(\t\x12\r\n\x05speed\x18\x05 \x01(\x02\"L\n\x12SynthesizeResponse\x12\x13\n\x0b\x61udio_bytes\x18\x01 \x01(\x0c\x12\x11\n\tmime_type\x18\x02 \x01(\t\x12\x0e\n\x06\x66ormat\x18\x03 \x01(\t2\xe2\x02\n\x10\x41tomAgentService\x12Q\n\x0e\x45xecuteCommand\x12\x1e.com.atom.proto.CommandRequest\x1a\x1f.com.atom.proto.CommandResponse\x12O\n\nStreamChat\x12\x1e.com.atom.proto.MessageRequest\x1a\x1f.com.atom.proto.MessageResponse0\x01\x12S\n\nTranscribe\x12!.com.atom.proto.TranscribeRequest\x1a\".com.atom.proto.TranscribeResponse\x12U\n\nSynthesize\x12!.com.atom.proto.SynthesizeRequest\x1a\".com.atom.proto.SynthesizeResponse0\x01\x42\x31\n$com.atom.infrastructure.adapter.grpcB\x07\x41iProtoP\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16proto/atom_agent.proto\x12\x0e\x63om.atom.proto\"2\n\x0e\x43ommandRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x0f\n\x07\x63ommand\x18\x02 \x01(\t\"\x98\x01\n\x0f\x43ommandResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x13\n\x0bout_message\x18\x02 \x01(\t\x12\x13\n\x0b\x61\x63tion_type\x18\x03 \x01(\t\x12\x17\n\x0fparameters_json\x18\x04 \x01(\t\x12\x12\n\nconfidence\x18\x05 \x01(\x02\x12\x1d\n\x15requires_confirmation\x18\x06 \x01(\x08\"C\n\x0eMessageRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x0f\n\x07\x63hat_id\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\"I\n\x0fMessageResponse\x12\x14\n\x0cscript_token\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x10\n\x08\x66inished\x18\x03 \x01(\x08\"p\n\x11TranscribeRequest\x12\x13\n\x0b\x61udio_bytes\x18\x01 \x01(\x0c\x12\x11\n\tmime_type\x18\x02 \x01(\t\x12\x10\n\x08language\x18\x03 \x01(\t\x12\x0e\n\x06\x66ormat\x18\x04 \x01(\t\x12\x11\n\tbeam_size\x18\x05 \x01(\x05\"t\n\x12TranscribeResponse\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x10\n\x08language\x18\x02 \x01(\t\x12\x18\n\x10\x64uration_seconds\x18\x03 \x01(\x02\x12\x12\n\nconfidence\x18\x04 \x01(\x02\x12\x10\n\x08provider\x18\x05 \x01(\t\"a\n\x11SynthesizeRequest\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\r\n\x05voice\x18\x02 \x01(\t\x12\x10\n\x08language\x18\x03 \x01(\t\x12\x0e\n\x06\x66ormat\x18\x04 \x01(\t\x12\r\n\x05speed\x18\x05 \x01(\x02\"L\n\x12SynthesizeResponse\x12\x13\n\x0b\x61udio_bytes\x18\x01 \x01(\x0c\x12\x11\n\tmime_type\x18\x02 \x01(\t\x12\x0e\n\x06\x66ormat\x18\x03 \x01(\t2\xe2\x02\n\x10\x41tomAgentService\x12Q\n\x0e\x45xecuteCommand\x12\x1e.com.atom.proto.CommandRequest\x1a\x1f.com.atom.proto.CommandResponse\x12O\n\nStreamChat\x12\x1e.com.atom.proto.MessageRequest\x1a\x1f.com.atom.proto.MessageResponse0\x01\x12S\n\nTranscribe\x12!.com.atom.proto.TranscribeRequest\x1a\".com.atom.proto.TranscribeResponse\x12U\n\nSynthesize\x12!.com.atom.proto.SynthesizeRequest\x1a\".com.atom.proto.SynthesizeResponse0\x01\x42\x31\n$com.atom.infrastructure.adapter.grpcB\x07\x41iProtoP\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -34,20 +34,20 @@ if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._serialized_options = b'\n$com.atom.infrastructure.adapter.grpcB\007AiProtoP\001'
   _globals['_COMMANDREQUEST']._serialized_start=42
   _globals['_COMMANDREQUEST']._serialized_end=92
-  _globals['_COMMANDRESPONSE']._serialized_start=94
-  _globals['_COMMANDRESPONSE']._serialized_end=149
-  _globals['_MESSAGEREQUEST']._serialized_start=151
-  _globals['_MESSAGEREQUEST']._serialized_end=218
-  _globals['_MESSAGERESPONSE']._serialized_start=220
-  _globals['_MESSAGERESPONSE']._serialized_end=293
-  _globals['_TRANSCRIBEREQUEST']._serialized_start=295
-  _globals['_TRANSCRIBEREQUEST']._serialized_end=407
-  _globals['_TRANSCRIBERESPONSE']._serialized_start=409
-  _globals['_TRANSCRIBERESPONSE']._serialized_end=525
-  _globals['_SYNTHESIZEREQUEST']._serialized_start=527
-  _globals['_SYNTHESIZEREQUEST']._serialized_end=624
-  _globals['_SYNTHESIZERESPONSE']._serialized_start=626
-  _globals['_SYNTHESIZERESPONSE']._serialized_end=702
-  _globals['_ATOMAGENTSERVICE']._serialized_start=705
-  _globals['_ATOMAGENTSERVICE']._serialized_end=1059
+  _globals['_COMMANDRESPONSE']._serialized_start=95
+  _globals['_COMMANDRESPONSE']._serialized_end=247
+  _globals['_MESSAGEREQUEST']._serialized_start=249
+  _globals['_MESSAGEREQUEST']._serialized_end=316
+  _globals['_MESSAGERESPONSE']._serialized_start=318
+  _globals['_MESSAGERESPONSE']._serialized_end=391
+  _globals['_TRANSCRIBEREQUEST']._serialized_start=393
+  _globals['_TRANSCRIBEREQUEST']._serialized_end=505
+  _globals['_TRANSCRIBERESPONSE']._serialized_start=507
+  _globals['_TRANSCRIBERESPONSE']._serialized_end=623
+  _globals['_SYNTHESIZEREQUEST']._serialized_start=625
+  _globals['_SYNTHESIZEREQUEST']._serialized_end=722
+  _globals['_SYNTHESIZERESPONSE']._serialized_start=724
+  _globals['_SYNTHESIZERESPONSE']._serialized_end=800
+  _globals['_ATOMAGENTSERVICE']._serialized_start=803
+  _globals['_ATOMAGENTSERVICE']._serialized_end=1157
 # @@protoc_insertion_point(module_scope)

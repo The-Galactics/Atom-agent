@@ -31,7 +31,18 @@ message CommandRequest {
 
 message CommandResponse {
   bool success = 1;
+  // Natural-language reply for the user (spoken via TTS / shown on screen).
   string out_message = 2;
+  // Resolved action the Android client must execute, e.g. "OPEN_APP",
+  // "MAKE_CALL". "NONE" means the turn was conversational (no action).
+  string action_type = 3;
+  // JSON object with the action slots, e.g. {"app_name": "whatsapp"}.
+  string parameters_json = 4;
+  // Recognition confidence in [0.0, 1.0]. 0.0 for conversational turns.
+  float confidence = 5;
+  // When true the client should confirm with the user before executing
+  // (sensitive actions such as calling or sending a message).
+  bool requires_confirmation = 6;
 }
 
 message MessageRequest {

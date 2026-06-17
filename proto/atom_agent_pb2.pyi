@@ -13,12 +13,20 @@ class CommandRequest(_message.Message):
     def __init__(self, user_id: _Optional[str] = ..., command: _Optional[str] = ...) -> None: ...
 
 class CommandResponse(_message.Message):
-    __slots__ = ("success", "out_message")
+    __slots__ = ("success", "out_message", "action_type", "parameters_json", "confidence", "requires_confirmation")
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
     OUT_MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    ACTION_TYPE_FIELD_NUMBER: _ClassVar[int]
+    PARAMETERS_JSON_FIELD_NUMBER: _ClassVar[int]
+    CONFIDENCE_FIELD_NUMBER: _ClassVar[int]
+    REQUIRES_CONFIRMATION_FIELD_NUMBER: _ClassVar[int]
     success: bool
     out_message: str
-    def __init__(self, success: _Optional[bool] = ..., out_message: _Optional[str] = ...) -> None: ...
+    action_type: str
+    parameters_json: str
+    confidence: float
+    requires_confirmation: bool
+    def __init__(self, success: _Optional[bool] = ..., out_message: _Optional[str] = ..., action_type: _Optional[str] = ..., parameters_json: _Optional[str] = ..., confidence: _Optional[float] = ..., requires_confirmation: _Optional[bool] = ...) -> None: ...
 
 class MessageRequest(_message.Message):
     __slots__ = ("user_id", "chat_id", "message")
