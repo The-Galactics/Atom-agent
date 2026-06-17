@@ -1,10 +1,16 @@
+import json
 import logging
 
 import grpc
 from concurrent import futures
 import proto.atom_agent_pb2 as pb2
 import proto.atom_agent_pb2_grpc as pb2_grpc
-from application.dtos import ChatInputDTO, TranscribeAudioInputDTO, SynthesizeSpeechInputDTO
+from application.dtos import (
+    ChatInputDTO,
+    ExecuteCommandInputDTO,
+    TranscribeAudioInputDTO,
+    SynthesizeSpeechInputDTO,
+)
 
 logger = logging.getLogger("voice_module")
 
@@ -18,10 +24,34 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             "grpc_ExecuteCommand peer=%s user_id=%s command=%r",
             context.peer(), request.user_id, request.command,
         )
-        # Placeholder for command execution logic
+        use_case = self.container.execute_command_use_case
+        if use_case is None:
+            detail = getattr(self.container, "intent_status", "intent provider unavailable")
+            await context.abort(
+                grpc.StatusCode.UNAVAILABLE,
+                f"Intent provider unavailable: {detail}",
+            )
+            return
+
+        try:
+            input_dto = ExecuteCommandInputDTO(text=request.command, user_id=request.user_id)
+            output = await use_case.execute(input_dto)
+        except Exception as exc:
+            logger.exception("grpc_ExecuteCommand failed peer=%s", context.peer())
+            await context.abort(grpc.StatusCode.INTERNAL, f"command failed: {exc}")
+            return
+
+        logger.info(
+            "grpc_ExecuteCommand ok peer=%s action=%s confidence=%.2f",
+            context.peer(), output.action_type, output.confidence,
+        )
         return pb2.CommandResponse(
-            success=True,
-            out_message=f"Agent acknowledged command: {request.command}"
+            success=output.success,
+            out_message=output.reply_text,
+            action_type=output.action_type,
+            parameters_json=json.dumps(output.parameters, ensure_ascii=False),
+            confidence=output.confidence,
+            requires_confirmation=output.requires_confirmation,
         )
 
     async def StreamChat(self, request, context):
