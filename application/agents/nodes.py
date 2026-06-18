@@ -1,3 +1,4 @@
+import asyncio
 import logging
 
 from domain.conversation.models import ChatMessage
@@ -17,6 +18,8 @@ class GraphNodes:
         self.vector_store = vector_store_port
         self.memory_enabled = memory_enabled
         self.memory_min_words = memory_min_words
+        # Keeps strong refs to fire-and-forget store tasks so they aren't GC'd.
+        self._bg_tasks: set[asyncio.Task] = set()
 
     async def retrieve_memory(self, state: AgentState) -> dict:
         """Retrieves semantic memory based on the user input.
@@ -72,13 +75,17 @@ class GraphNodes:
         if not is_memorable(state["input"], self.memory_min_words):
             logger.info("memory_skip_trivial session_id=%s", state.get("session_id"))
             return {}
-        try:
-            content = f"Usuario: {state['input']}\nAtom: {state['response'].content}"
-            await self.vector_store.store(content, {"session_id": state["session_id"]})
-        except Exception as exc:
-            logger.warning(
-                "memory_store_failed session_id=%s error=%s",
-                state.get("session_id"),
-                exc,
-            )
+        # Persist in the background so the chat response isn't blocked on the
+        # embedding + vector upsert round-trips (saves ~0.2-0.4s per turn).
+        content = f"Usuario: {state['input']}\nAtom: {state['response'].content}"
+        task = asyncio.create_task(self._persist(content, state["session_id"]))
+        self._bg_tasks.add(task)
+        task.add_done_callback(self._bg_tasks.discard)
         return {}
+
+    async def _persist(self, content: str, session_id: str) -> None:
+        """Embeds + upserts the interaction off the request path. Best-effort."""
+        try:
+            await self.vector_store.store(content, {"session_id": session_id})
+        except Exception as exc:
+            logger.warning("memory_store_failed session_id=%s error=%s", session_id, exc)
