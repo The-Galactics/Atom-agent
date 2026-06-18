@@ -54,8 +54,14 @@ LLM.
 
 A self-contained end-to-end test starts the **real** `AtomGrpcService` on a
 loopback port and drives it with the generated stubs over an insecure channel.
-It injects a stub container with a fake `chat_use_case`, so `StreamChat` runs
-without any provider keys.
+It injects a stub container with fake use cases, so all RPCs run without any
+provider keys.
+
+```bash
+PYTHONPATH=. .venv/bin/python -m pytest tests/integration/test_grpc_connection.py -q
+```
+
+You can also run it as a standalone smoke script:
 
 ```bash
 PYTHONPATH=. .venv/bin/python tests/integration/test_grpc_connection.py
@@ -71,9 +77,9 @@ Expected output:
 RESULT: PASS
 ```
 
-> The test is a plain `asyncio` runner rather than a `pytest.mark.asyncio` test
-> because the project does not yet depend on `pytest-asyncio`. The rest of the
-> suite (`pytest -q`, 11 tests) is unaffected and stays green.
+> The test is implemented with `asyncio` internals but is now also collected by
+> `pytest` (`test_grpc_connection_full_flow`), so it is part of the regular
+> automated suite.
 
 ### Testing the live AI path
 
