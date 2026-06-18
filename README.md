@@ -9,7 +9,7 @@ Atom Agent is a high-performance conversational intelligence layer designed for 
 - **Semantic Memory:** **Qdrant** integration with **Gemini text-embedding-004** (768 dimensions).
 - **Voice Capabilities:**
   - **STT:** Faster Whisper for high-accuracy speech-to-text.
-  - **TTS:** Kokoro for premium, natural-sounding synthesis.
+  - **TTS:** Kokoro for premium, natural-sounding synthesis (default voice: `af_heart`).
 - **Hexagonal Architecture:** Decoupled domain logic from infrastructure (LLMs, Vector Stores, Voice Engines).
 
 ## 📂 Structure
@@ -28,6 +28,15 @@ Atom Agent is a high-performance conversational intelligence layer designed for 
 - Python 3.10+
 - Docker & Docker Compose
 - Google API Key (for Gemini)
+
+## ⬇️ Download Locally
+
+Clone the repository and move into the project folder:
+
+```bash
+git clone https://github.com/The-Galactics/Atom-agent.git
+cd Atom-agent
+```
 
 ## ⚙️ Configuration
 
@@ -82,7 +91,7 @@ curl -X POST http://localhost:8000/voice/transcribe \
 ```bash
 curl -X POST http://localhost:8000/voice/synthesize \
   -H "Content-Type: application/json" \
-  -d '{"text":"Hola Gemi, ¿cómo puedo ayudarte?"}' \
+  -d '{"text":"Hola Gemi, ¿cómo puedo ayudarte?", "voice":"af_heart"}' \
   --output response.wav
 ```
 
