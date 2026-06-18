@@ -71,6 +71,47 @@ Check status:
 docker-compose ps
 ```
 
+## ☁️ Deploy on VPS (Ubuntu)
+
+Recommended for production-like environments:
+
+1) Install Docker and Compose plugin
+```bash
+sudo apt update
+sudo apt install -y ca-certificates curl gnupg
+sudo install -m 0755 -d /etc/apt/keyrings
+curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+sudo chmod a+r /etc/apt/keyrings/docker.gpg
+echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo $VERSION_CODENAME) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+sudo apt update
+sudo apt install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
+```
+
+2) Download and configure the project
+```bash
+git clone https://github.com/The-Galactics/Atom-agent.git
+cd Atom-agent
+cp .env.example .env
+```
+
+3) Edit `.env` with your real values (at minimum `GOOGLE_API_KEY`)
+
+4) Start services
+```bash
+docker compose up --build -d
+```
+
+5) Open firewall ports (optional but recommended)
+```bash
+sudo ufw allow 22/tcp
+sudo ufw allow 8000/tcp
+sudo ufw enable
+```
+
+Notes:
+- `KOKORO_DEFAULT_VOICE` is configurable by environment variable; if omitted, it falls back to `af_heart`.
+- For HTTPS/public domain, put Nginx or Caddy in front of port `8000`.
+
 ## 🧪 Testing the Agent
 
 ### Chat Endpoint
