@@ -40,6 +40,11 @@ class Settings(BaseSettings):
     voice_enabled: bool = Field(True, env="VOICE_ENABLED")
     memory_enabled: bool = Field(True, env="MEMORY_ENABLED")
 
+    # Deploy-only: host port docker-compose maps to the API container (see
+    # docker-compose.yml `${VOICE_API_PORT:-8000}:8000`). It lives in `.env`,
+    # so Settings must accept it or startup fails with `extra_forbidden`.
+    voice_api_port: int = Field(8000, env="VOICE_API_PORT")
+
     # Memory hygiene — keep the vector store small, clean and relevant.
     #   - min_words: importance filter; turns shorter than this (and without a
     #     fact marker) are NOT persisted (skips greetings/smalltalk).
