@@ -78,7 +78,7 @@ def test_synthesize_speech_use_case():
         audio_format="mp3",
         language="es-ES",
     )
-    output = use_case.execute(input_dto)
+    output = asyncio.run(use_case.execute(input_dto))
 
     assert output.audio_bytes == b"FAKEAUDIO"
     assert output.mime_type == "audio/mpeg"
@@ -89,4 +89,4 @@ def test_synthesize_speech_use_case_empty_text():
     port = FakeTextToSpeechPort()
     use_case = SynthesizeSpeechUseCase(tts_port=port)
     with pytest.raises(Exception):
-        use_case.execute(SynthesizeSpeechInputDTO(text="", audio_format="mp3"))
+        asyncio.run(use_case.execute(SynthesizeSpeechInputDTO(text="", audio_format="mp3")))

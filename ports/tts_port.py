@@ -7,7 +7,7 @@ from domain.voice.models import SynthesisResult
 class TextToSpeechPort(ABC):
     # Contract for text-to-speech providers.
     @abstractmethod
-    def synthesize(
+    async def synthesize(
         self,
         text: str,
         voice: str | None = None,

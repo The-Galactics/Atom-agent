@@ -155,7 +155,7 @@ def create_voice_router(
                 language=request.language,
                 speed=request.speed,
             )
-            output = use_case.execute(input_dto)
+            output = await use_case.execute(input_dto)
             headers = {
                 "Content-Disposition": f'inline; filename="speech.{output.format}"',
             }

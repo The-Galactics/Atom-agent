@@ -121,8 +121,7 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             audio_format=request.format,
             speed=request.speed
         )
-        # Note: TTS execution is synchronous in current implementation
-        output = use_case.execute(input_dto)
+        output = await use_case.execute(input_dto)
 
         yield pb2.SynthesizeResponse(
             audio_bytes=output.audio_bytes,

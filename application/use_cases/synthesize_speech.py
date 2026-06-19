@@ -16,7 +16,7 @@ class SynthesizeSpeechUseCase:
         self._max_text_chars = max_text_chars
         self._default_language = default_language
 
-    def execute(self, input_dto: SynthesizeSpeechInputDTO) -> SynthesizeSpeechOutputDTO:
+    async def execute(self, input_dto: SynthesizeSpeechInputDTO) -> SynthesizeSpeechOutputDTO:
         # Validate text and speed constraints.
         if not input_dto.text or not input_dto.text.strip():
             raise DomainValidationError("Text cannot be empty.")
@@ -38,7 +38,7 @@ class SynthesizeSpeechUseCase:
         except ValueError as exc:
             raise DomainValidationError(str(exc)) from exc
 
-        synthesis = self._tts_port.synthesize(
+        synthesis = await self._tts_port.synthesize(
             text=normalized_text,
             voice=input_dto.voice,
             format=audio_format,

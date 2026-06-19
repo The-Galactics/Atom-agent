@@ -31,7 +31,14 @@ class Settings(BaseSettings):
     qdrant_url: str = Field("http://localhost:6333", env="QDRANT_URL")
     qdrant_api_key: str | None = Field(None, env="QDRANT_API_KEY")
     qdrant_collection: str = Field("memory", env="QDRANT_COLLECTION")
+    # Embedding dimensionality — must match the configured embedding model
+    # (e.g. gemini text-embedding models are 3072-dim).
+    qdrant_vector_size: int = Field(3072, env="QDRANT_VECTOR_SIZE")
     embedding_model: str = Field("models/embedding-001", env="EMBEDDING_MODEL")
+
+    # Cap on in-memory chat history per session to bound memory growth in
+    # long-running deployments (oldest messages are dropped past this limit).
+    history_max_messages_per_session: int = Field(50, env="HISTORY_MAX_MESSAGES_PER_SESSION")
 
     # Feature flags for graceful degradation. Both default to True so the
     # service is production-capable; at runtime, voice further requires the
