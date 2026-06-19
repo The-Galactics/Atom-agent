@@ -186,8 +186,11 @@ def build_container(settings: Settings) -> AppContainer:
         dedup_threshold=settings.memory_dedup_threshold,
         ttl_days=settings.memory_ttl_days,
         prune_every=settings.memory_prune_every,
+        vector_size=settings.qdrant_vector_size,
     )
-    history_adapter = InMemoryHistoryAdapter()
+    history_adapter = InMemoryHistoryAdapter(
+        max_messages_per_session=settings.history_max_messages_per_session,
+    )
 
     nodes = GraphNodes(
         llm_adapter, vector_store,

@@ -26,8 +26,12 @@ class ChatUseCase:
 
         response = final_state["response"]
 
-        # 3) Persist messages returned by the graph node(s).
-        for msg in final_state["messages"]:
+        # 3) Persist only the NEW messages produced this turn.
+        # generate_response returns [user_msg, assistant_msg]; the loaded
+        # history was passed into the graph as initial state, so re-persisting
+        # the full accumulated `messages` would store every prior message again
+        # on each turn (N-fold duplication). Persist just the last two.
+        for msg in final_state["messages"][-2:]:
             self.history.add_message(input_dto.session_id, msg)
 
         return ChatOutputDTO(

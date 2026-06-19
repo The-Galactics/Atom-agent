@@ -10,8 +10,10 @@ class GeminiEmbeddingAdapter(EmbeddingPort):
             google_api_key=api_key
         )
 
-    def embed_text(self, text: str) -> list[float]:
-        return self.embeddings.embed_query(text)
+    async def embed_text(self, text: str) -> list[float]:
+        # Async embedding call keeps the event loop unblocked during the
+        # network round-trip (invoked from async QdrantAdapter store/search).
+        return await self.embeddings.aembed_query(text)
 
-    def embed_documents(self, texts: list[str]) -> list[list[float]]:
-        return self.embeddings.embed_documents(texts)
+    async def embed_documents(self, texts: list[str]) -> list[list[float]]:
+        return await self.embeddings.aembed_documents(texts)

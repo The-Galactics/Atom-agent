@@ -1,3 +1,5 @@
+import asyncio
+
 from domain.errors import ProviderError
 from domain.value_objects import AudioFormat, Language
 from domain.voice.models import SynthesisResult
@@ -21,7 +23,7 @@ class KokoroAdapter(TextToSpeechPort):
             else AudioFormat.from_string(default_format)
         )
 
-    def synthesize(
+    async def synthesize(
         self,
         text: str,
         voice: str | None = None,
@@ -33,12 +35,19 @@ class KokoroAdapter(TextToSpeechPort):
         selected_voice = voice or self._default_voice
         selected_format = format or self._default_format
         try:
-            audio_bytes = self._client.synthesize(
-                text=text,
-                voice=selected_voice,
-                audio_format=selected_format.value,
-                language=language,
-                speed=speed,
+            # KokoroClient uses a blocking HTTP client (requests). Run it in a
+            # thread so the synchronous I/O + retry backoff does not block the
+            # event loop serving other requests.
+            loop = asyncio.get_event_loop()
+            audio_bytes = await loop.run_in_executor(
+                None,
+                lambda: self._client.synthesize(
+                    text=text,
+                    voice=selected_voice,
+                    audio_format=selected_format.value,
+                    language=language,
+                    speed=speed,
+                ),
             )
             return SynthesisResult(
                 audio_bytes=audio_bytes,

@@ -22,7 +22,7 @@ class FakeSpeechToTextPort(SpeechToTextPort):
 
 
 class FakeTextToSpeechPort(TextToSpeechPort):
-    def synthesize(
+    async def synthesize(
         self,
         text: str,
         voice: str | None = None,

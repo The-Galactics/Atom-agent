@@ -30,11 +30,14 @@ class QdrantAdapter(VectorStorePort):
         dedup_threshold: float = 0.95,
         ttl_days: int = 30,
         prune_every: int = 20,
+        vector_size: int = 3072,
     ):
         self.url = url
         self.api_key = api_key
         self.collection_name = collection_name
         self.embedding_port = embedding_port
+        # Embedding dimensionality; must match the configured embedding model.
+        self.vector_size = vector_size
         # Memory-hygiene knobs (see Settings). dedup_threshold >= 1.0 disables
         # dedup; ttl_days <= 0 disables TTL pruning.
         self.dedup_threshold = dedup_threshold
@@ -52,28 +55,30 @@ class QdrantAdapter(VectorStorePort):
 
     def _ensure_collection(self):
         # Verify the collection exists and has the expected vector dimension.
+        # Use the private ``_client`` here (not the ``client`` property) because
+        # this runs from inside the property after ``_client`` is assigned;
+        # referencing the property would recurse back into ``_ensure_collection``.
         try:
-            collection_info = self.client.get_collection(self.collection_name)
+            collection_info = self._client.get_collection(self.collection_name)
             current_size = collection_info.config.params.vectors.size
-            if current_size != 3072:
-                print(f"Dimension mismatch (expected 3072, got {current_size}). Recreating collection...")
-                self.client.delete_collection(self.collection_name)
+            if current_size != self.vector_size:
+                print(f"Dimension mismatch (expected {self.vector_size}, got {current_size}). Recreating collection...")
+                self._client.delete_collection(self.collection_name)
                 self._create_collection()
         except Exception:
             # Collection does not exist
             self._create_collection()
 
     def _create_collection(self):
-        # gemini-embedding-2 has 3072 dimensions
-        self.client.create_collection(
+        self._client.create_collection(
             collection_name=self.collection_name,
             vectors_config=rest.VectorParams(
-                size=3072, distance=rest.Distance.COSINE
+                size=self.vector_size, distance=rest.Distance.COSINE
             ),
         )
         # Index created_at so TTL pruning (delete-by-range) stays efficient.
         try:
-            self.client.create_payload_index(
+            self._client.create_payload_index(
                 collection_name=self.collection_name,
                 field_name="created_at",
                 field_schema=rest.PayloadSchemaType.INTEGER,
@@ -83,7 +88,7 @@ class QdrantAdapter(VectorStorePort):
 
     async def store(self, content: str, metadata: dict) -> None:
         # Embed content once; reuse the vector for dedup and upsert.
-        vector = self.embedding_port.embed_text(content)
+        vector = await self.embedding_port.embed_text(content)
 
         # #2 Dedup: skip storing a near-duplicate of an existing memory.
         if self.dedup_threshold < 1.0 and self._is_duplicate(vector):
@@ -143,7 +148,7 @@ class QdrantAdapter(VectorStorePort):
         self, query: str, limit: int = 5, score_threshold: float = 0.5
     ) -> list[MemoryEntry]:
         # Embed query and return mapped memory entries.
-        vector = self.embedding_port.embed_text(query)
+        vector = await self.embedding_port.embed_text(query)
         results = self.client.query_points(
             collection_name=self.collection_name,
             query=vector,

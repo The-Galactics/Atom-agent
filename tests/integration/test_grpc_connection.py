@@ -57,7 +57,7 @@ class _FakeTranscribeUseCase:
 
 
 class _FakeSynthesizeUseCase:
-    def execute(self, input_dto):
+    async def execute(self, input_dto):
         return SynthesizeSpeechOutputDTO(
             audio_bytes=b"FAKEAUDIO",
             mime_type="audio/wav",
