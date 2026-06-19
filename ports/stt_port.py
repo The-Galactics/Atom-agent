@@ -15,3 +15,8 @@ class SpeechToTextPort(ABC):
         beam_size: int = 5,
     ) -> Transcription:
         raise NotImplementedError
+
+    def shutdown(self) -> None:
+        # Optional lifecycle hook. Providers that hold resources (thread pools,
+        # loaded models) override this; the default is a no-op.
+        return None

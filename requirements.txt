@@ -12,7 +12,6 @@ langchain>=0.1.0
 langgraph>=0.0.1
 langchain-google-genai
 qdrant-client
-langgraph
 langchain-community>=0.0.10
 
 # Optional provider libraries

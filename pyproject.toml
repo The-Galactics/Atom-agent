@@ -1,7 +1,7 @@
 [project]
-name = "voice-module"
+name = "atom-agent"
 version = "0.1.0"
-description = "Voice module for STT and TTS using FastAPI, Faster Whisper and Kokoro"
+description = "Atom Agent backend: voice (STT/TTS), conversational AI with semantic memory, and Android intent recognition, served over FastAPI and gRPC"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = [
@@ -11,11 +11,23 @@ dependencies = [
   "pydantic-settings>=2.0.0",
   "requests>=2.31.0",
   "python-multipart>=0.0.6",
+  "httpx>=0.26.0",
+  # LLM & memory
+  "langchain>=0.1.0",
+  "langgraph>=0.0.1",
+  "langchain-google-genai",
+  "langchain-community>=0.0.10",
+  "qdrant-client",
+  # gRPC transport
+  "grpcio==1.81.1",
+  "protobuf==6.33.6",
+  "typing_extensions==4.15.0",
 ]
 
 [project.optional-dependencies]
 providers = ["faster-whisper>=0.8.0"]
 test = ["pytest>=8.0.0", "httpx>=0.26.0"]
+grpc-tools = ["grpcio-tools==1.81.1"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
