@@ -19,6 +19,12 @@ from application.use_cases.transcribe_audio import TranscribeAudioUseCase
 from domain.value_objects import AudioFormat
 from infrastructure.config import Settings
 from infrastructure.provider_clients import KokoroClient
+from ports.stt_port import SpeechToTextPort
+from ports.tts_port import TextToSpeechPort
+from ports.llm_port import LLMPort
+from ports.vector_store_port import VectorStorePort
+from ports.embedding_port import EmbeddingPort
+from ports.history_port import HistoryPort
 
 logger = logging.getLogger("voice_module")
 
@@ -28,12 +34,12 @@ class AppContainer:
     # Central dependency graph shared by the API layer.
     settings: Settings
     kokoro_client: Optional[KokoroClient]
-    stt_adapter: Optional[FasterWhisperAdapter]
-    tts_adapter: Optional[KokoroAdapter]
-    llm_adapter: GeminiAdapter
-    vector_store: QdrantAdapter
-    embedding_adapter: GeminiEmbeddingAdapter
-    history_adapter: InMemoryHistoryAdapter
+    stt_adapter: Optional[SpeechToTextPort]
+    tts_adapter: Optional[TextToSpeechPort]
+    llm_adapter: LLMPort
+    vector_store: VectorStorePort
+    embedding_adapter: EmbeddingPort
+    history_adapter: HistoryPort
     transcribe_use_case: Optional[TranscribeAudioUseCase]
     synthesize_use_case: Optional[SynthesizeSpeechUseCase]
     chat_use_case: ChatUseCase
