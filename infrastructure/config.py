@@ -27,7 +27,15 @@ class Settings(BaseSettings):
 
     # Sprint 2/3: LLM & Memory
     google_api_key: str | None = Field(None, env="GOOGLE_API_KEY")
-    llm_model: str = Field("gemini-1.5-flash", env="LLM_MODEL")
+    # gemini-1.5-flash is deprecated and only supports the legacy grounding API;
+    # 2.5-flash is cheaper and exposes the native google_search tool.
+    llm_model: str = Field("gemini-2.5-flash", env="LLM_MODEL")
+    # IANA timezone used to tell the model the current date/time (see
+    # domain/datetime_context). Default: Colombia.
+    assistant_timezone: str = Field("America/Bogota", env="ASSISTANT_TIMEZONE")
+    # When True, conversational answers are grounded with Google Search so the
+    # model can use live web information. Requires a Gemini 2.x model.
+    web_search_enabled: bool = Field(True, env="WEB_SEARCH_ENABLED")
     qdrant_url: str = Field("http://localhost:6333", env="QDRANT_URL")
     qdrant_api_key: str | None = Field(None, env="QDRANT_API_KEY")
     qdrant_collection: str = Field("memory", env="QDRANT_COLLECTION")

@@ -3,6 +3,7 @@ import logging
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from adapters.llm.content import extract_text
+from domain.datetime_context import current_datetime_sentence
 from domain.errors import ProviderError
 from domain.intent.catalog import openai_tools, spec_for_tool
 from domain.intent.models import Action, ActionType, IntentResult
@@ -27,7 +28,8 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
     response becomes a conversational :class:`IntentResult` (``ActionType.NONE``).
     """
 
-    def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash",
+                timezone: str = "America/Bogota"):
         llm = ChatGoogleGenerativeAI(
             model=model,
             google_api_key=api_key,
@@ -35,9 +37,13 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
         )
         # Bind once; the bound model is reused for every recognition call.
         self._llm = llm.bind_tools(openai_tools())
+        self._timezone = timezone
 
     async def recognize(self, text: str, session_id: str = "default") -> IntentResult:
-        messages = [("system", _SYSTEM_PROMPT), ("human", text)]
+        # Prepend the real current date/time so conversational fallbacks (e.g.
+        # "¿qué día es hoy?") are answered correctly; the model has no clock.
+        system_prompt = f"{_SYSTEM_PROMPT}\n{current_datetime_sentence(self._timezone)}"
+        messages = [("system", system_prompt), ("human", text)]
         try:
             response = await self._llm.ainvoke(messages)
         except Exception as exc:  # noqa: BLE001 - surface provider failures uniformly

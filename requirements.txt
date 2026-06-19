@@ -10,9 +10,13 @@ httpx>=0.26.0
 # Sprint 2: LLM & Memory
 langchain>=0.1.0
 langgraph>=0.0.1
-langchain-google-genai
+# >=2.1 exposes the native google_search grounding tool for Gemini 2.x.
+langchain-google-genai>=2.1.0
 qdrant-client
 langchain-community>=0.0.10
+# IANA timezone database so zoneinfo resolves America/Bogota in slim containers
+# (used by domain/datetime_context).
+tzdata
 
 # Optional provider libraries
 faster-whisper>=0.8.0

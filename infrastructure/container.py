@@ -148,12 +148,14 @@ def _build_voice_adapters(settings: Settings):
     return kokoro_client, stt_adapter, tts_adapter, status
 
 
-def _build_intent_use_case(settings: Settings):
+def _build_intent_use_case(settings: Settings, chat_use_case: ChatUseCase):
     """Construct the order/intent use case defensively.
 
     Returns (use_case, status). ``use_case`` is ``None`` when the function-
     calling provider can't be built (missing ``langchain-google-genai``,
-    absent API key, etc.), so the order endpoint degrades gracefully.
+    absent API key, etc.), so the order endpoint degrades gracefully. The chat
+    use case is injected so conversational (non-action) utterances are answered
+    by the grounded chat path instead of the router's context-free reply.
     """
     if not settings.google_api_key:
         return None, "intent provider unavailable: GOOGLE_API_KEY not set"
@@ -165,8 +167,13 @@ def _build_intent_use_case(settings: Settings):
         recognizer = GeminiFunctionCallingAdapter(
             api_key=settings.google_api_key,
             model=settings.llm_model,
+            timezone=settings.assistant_timezone,
         )
-        return ExecuteCommandUseCase(intent_recognizer=recognizer), "ready"
+        use_case = ExecuteCommandUseCase(
+            intent_recognizer=recognizer,
+            chat_use_case=chat_use_case,
+        )
+        return use_case, "ready"
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("intent_init_failed error=%s", exc)
         return None, f"intent provider unavailable: {exc}"
@@ -179,6 +186,7 @@ def build_container(settings: Settings) -> AppContainer:
     llm_adapter = GeminiAdapter(
         api_key=settings.google_api_key or "",
         model=settings.llm_model,
+        web_search=settings.web_search_enabled,
     )
     embedding_adapter = GeminiEmbeddingAdapter(
         api_key=settings.google_api_key or "",
@@ -202,6 +210,7 @@ def build_container(settings: Settings) -> AppContainer:
         llm_adapter, vector_store,
         memory_enabled=settings.memory_enabled,
         memory_min_words=settings.memory_min_words,
+        timezone=settings.assistant_timezone,
     )
     graph = build_graph(nodes)
 
@@ -229,7 +238,8 @@ def build_container(settings: Settings) -> AppContainer:
     )
 
     # Built defensively: degrades to UNAVAILABLE if the provider is misconfigured.
-    execute_command_use_case, intent_status = _build_intent_use_case(settings)
+    # chat_use_case is injected so non-action utterances get the grounded path.
+    execute_command_use_case, intent_status = _build_intent_use_case(settings, chat_use_case)
 
     if transcribe_use_case is None or synthesize_use_case is None:
         logger.warning("voice_degraded detail=%s", voice_status)
