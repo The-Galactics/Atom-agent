@@ -33,7 +33,18 @@ rpc ExecuteCommand (CommandRequest) returns (CommandResponse);
 
 message CommandRequest {
   string user_id = 1;
-  string command = 2;   // the user's natural-language order (text)
+  string command = 2;                       // the user's natural-language order (text)
+  repeated ScreenElement screen_elements = 3; // structured screen map (accessibility)
+}
+
+message ScreenElement {
+  string text = 1;
+  string role = 2;        // short widget class, e.g. Button/EditText/TextView
+  bool   clickable = 3;
+  bool   focusable = 4;
+  bool   editable = 5;
+  bool   scrollable = 6;
+  int32  index = 7;       // stable ordinal
 }
 
 message CommandResponse {
@@ -52,6 +63,27 @@ message CommandResponse {
 > python -m grpc_tools.protoc -I . --python_out=. --grpc_python_out=. --pyi_out=. proto/atom_agent.proto
 > # Android: rebuild — the protobuf-gradle plugin regenerates Java stubs from the shared .proto
 > ```
+
+### `screen_elements` — the structured screen map
+
+When accessibility is enabled, the Android client attaches a snapshot of the
+currently visible UI as `CommandRequest.screen_elements` (repeated
+`ScreenElement`, field 3). The backend renders these into the model's context so
+Gemini can reason over real screen structure and drive `read_screen` /
+`tap_element` against actual targets instead of claiming it cannot see the screen.
+
+| Field | Type | Meaning |
+|---|---|---|
+| `text` | string | Visible text of the element. |
+| `role` | string | Short widget class, e.g. `Button`, `EditText`, `TextView`. |
+| `clickable` | bool | Element responds to taps. |
+| `focusable` | bool | Element can receive focus. |
+| `editable` | bool | Element accepts text input. |
+| `scrollable` | bool | Element can be scrolled. |
+| `index` | int32 | Stable ordinal used to disambiguate targets. |
+
+The field is optional: an empty list is valid and the model simply has no screen
+context for that turn.
 
 ### gRPC status codes
 
@@ -75,6 +107,10 @@ slots.
 | `SET_ALARM` | `time` (string `HH:MM`), `label` (string, optional) | no | "pon una alarma a las 7:30" | `AlarmClock.ACTION_SET_ALARM` |
 | `SET_TIMER` | `duration_seconds` (integer), `label` (string, optional) | no | "temporizador de 5 minutos" | `AlarmClock.ACTION_SET_TIMER` |
 | `TOGGLE_SETTING` | `setting` (`wifi`\|`bluetooth`\|`flashlight`\|`do_not_disturb`), `state` (`on`\|`off`\|`toggle`) | no | "enciende la linterna" | `CameraManager.setTorchMode`, Quick Settings tile, or AccessibilityService |
+| `NAVIGATE` | `direction` (`back`\|`home`\|`recents`\|`quick_settings`) | no | "ve atrás" | `AccessibilityService.performGlobalAction` |
+| `SCROLL` | `direction` (`up`\|`down`\|`left`\|`right`) | no | "baja la pantalla" | `AccessibilityService` node `ACTION_SCROLL_*` / `dispatchGesture` |
+| `READ_SCREEN` | `{}` | no | "¿qué hay en la pantalla?" | `AccessibilityService` walks the active window; text returned in `out_message` |
+| `TAP_ELEMENT` | `text` (string: visible label) | **yes** | "toca Ajustes" | `AccessibilityService` `findAccessibilityNodeInfosByText` + `ACTION_CLICK` |
 | `NONE` | `{}` | no | "¿qué tiempo hace?" | No action — speak `out_message` |
 
 ### Example responses
