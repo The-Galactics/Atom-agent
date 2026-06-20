@@ -123,6 +123,51 @@ ACTION_CATALOG: tuple[ActionSpec, ...] = (
             ),
         ),
     ),
+    # --- Accessibility-powered actions --------------------------------------
+    # Fulfilled on-device by the AccessibilityService (global navigation,
+    # gestures, reading and tapping on-screen nodes).
+    ActionSpec(
+        type=ActionType.NAVIGATE,
+        tool_name="navigate",
+        description="Realiza una navegación global del sistema: atrás, inicio, recientes o ajustes rápidos.",
+        parameters=(
+            ParameterSpec(
+                "direction", "string", "Acción de navegación a realizar.",
+                enum=("back", "home", "recents", "quick_settings"),
+            ),
+        ),
+    ),
+    ActionSpec(
+        type=ActionType.SCROLL,
+        tool_name="scroll",
+        description="Desplaza la pantalla actual en la dirección indicada.",
+        parameters=(
+            ParameterSpec(
+                "direction", "string", "Dirección del desplazamiento.",
+                enum=("up", "down", "left", "right"),
+            ),
+        ),
+    ),
+    ActionSpec(
+        type=ActionType.READ_SCREEN,
+        tool_name="read_screen",
+        description=(
+            "Lee en voz alta el contenido visible de la pantalla actual. Úsala "
+            "siempre que el usuario pida leer, oír o saber qué hay en la pantalla, "
+            "p. ej. 'lee la pantalla', 'léeme la pantalla', 'qué hay en la pantalla', "
+            "'qué ves', 'qué pone', 'descríbeme la pantalla'."
+        ),
+        parameters=(),
+    ),
+    ActionSpec(
+        type=ActionType.TAP_ELEMENT,
+        tool_name="tap_element",
+        description="Pulsa un elemento de la pantalla identificado por su texto visible.",
+        parameters=(
+            ParameterSpec("text", "string", "Texto visible del elemento a pulsar, p. ej. 'Aceptar', 'Ajustes'."),
+        ),
+        requires_confirmation=True,
+    ),
 )
 
 # Lookups keyed both ways so adapters/use-cases never hard-code action names.
