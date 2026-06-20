@@ -16,7 +16,9 @@ class ExecuteCommandUseCase:
 
     async def execute(self, input_dto: ExecuteCommandInputDTO) -> ExecuteCommandOutputDTO:
         result = await self.intent_recognizer.recognize(
-            input_dto.text, session_id=input_dto.user_id
+            input_dto.text,
+            session_id=input_dto.user_id,
+            screen=input_dto.screen_elements,
         )
 
         reply = result.reply
