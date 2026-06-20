@@ -15,6 +15,12 @@ class ActionType(str, Enum):
     SET_ALARM = "SET_ALARM"
     SET_TIMER = "SET_TIMER"
     TOGGLE_SETTING = "TOGGLE_SETTING"
+    # Accessibility-powered actions, fulfilled on-device by the
+    # AccessibilityService rather than a plain Intent.
+    NAVIGATE = "NAVIGATE"
+    SCROLL = "SCROLL"
+    READ_SCREEN = "READ_SCREEN"
+    TAP_ELEMENT = "TAP_ELEMENT"
     NONE = "NONE"
 
     @classmethod

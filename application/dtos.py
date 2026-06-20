@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -57,6 +57,8 @@ class ChatOutputDTO:
 class ExecuteCommandInputDTO:
     text: str
     user_id: str = "default"
+    # Structured screen snapshot from the client when accessibility is enabled.
+    screen_elements: list = field(default_factory=list)
 
 
 @dataclass

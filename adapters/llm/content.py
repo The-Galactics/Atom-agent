@@ -21,6 +21,7 @@ def extract_text(content) -> str:
                 text = block.get("text")
                 if text:
                     parts.append(text)
-        joined = "".join(parts).strip()
-        return joined if joined else str(content)
+        # No visible text (e.g. a tool-call turn, or reasoning-only blocks):
+        # return "" rather than leaking the raw block structure (str(content)).
+        return "".join(parts).strip()
     return str(content) if content else ""

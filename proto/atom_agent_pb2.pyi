@@ -1,16 +1,38 @@
+from google.protobuf.internal import containers as _containers
 from google.protobuf import descriptor as _descriptor
 from google.protobuf import message as _message
-from typing import ClassVar as _ClassVar, Optional as _Optional
+from collections.abc import Iterable as _Iterable, Mapping as _Mapping
+from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class ScreenElement(_message.Message):
+    __slots__ = ("text", "role", "clickable", "focusable", "editable", "scrollable", "index")
+    TEXT_FIELD_NUMBER: _ClassVar[int]
+    ROLE_FIELD_NUMBER: _ClassVar[int]
+    CLICKABLE_FIELD_NUMBER: _ClassVar[int]
+    FOCUSABLE_FIELD_NUMBER: _ClassVar[int]
+    EDITABLE_FIELD_NUMBER: _ClassVar[int]
+    SCROLLABLE_FIELD_NUMBER: _ClassVar[int]
+    INDEX_FIELD_NUMBER: _ClassVar[int]
+    text: str
+    role: str
+    clickable: bool
+    focusable: bool
+    editable: bool
+    scrollable: bool
+    index: int
+    def __init__(self, text: _Optional[str] = ..., role: _Optional[str] = ..., clickable: _Optional[bool] = ..., focusable: _Optional[bool] = ..., editable: _Optional[bool] = ..., scrollable: _Optional[bool] = ..., index: _Optional[int] = ...) -> None: ...
+
 class CommandRequest(_message.Message):
-    __slots__ = ("user_id", "command")
+    __slots__ = ("user_id", "command", "screen_elements")
     USER_ID_FIELD_NUMBER: _ClassVar[int]
     COMMAND_FIELD_NUMBER: _ClassVar[int]
+    SCREEN_ELEMENTS_FIELD_NUMBER: _ClassVar[int]
     user_id: str
     command: str
-    def __init__(self, user_id: _Optional[str] = ..., command: _Optional[str] = ...) -> None: ...
+    screen_elements: _containers.RepeatedCompositeFieldContainer[ScreenElement]
+    def __init__(self, user_id: _Optional[str] = ..., command: _Optional[str] = ..., screen_elements: _Optional[_Iterable[_Union[ScreenElement, _Mapping]]] = ...) -> None: ...
 
 class CommandResponse(_message.Message):
     __slots__ = ("success", "out_message", "action_type", "parameters_json", "confidence", "requires_confirmation")
