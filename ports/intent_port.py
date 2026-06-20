@@ -12,6 +12,13 @@ class IntentRecognizerPort(ABC):
     """
 
     @abstractmethod
-    async def recognize(self, text: str, session_id: str = "default") -> IntentResult:
-        """Interpret ``text`` and return the resolved intent."""
+    async def recognize(
+        self, text: str, session_id: str = "default", screen=None
+    ) -> IntentResult:
+        """Interpret ``text`` and return the resolved intent.
+
+        ``screen`` is an optional list of visible screen elements (each carrying
+        the ScreenElement fields) so the recognizer can reason over real screen
+        structure. ``None`` keeps existing callers valid.
+        """
         ...
