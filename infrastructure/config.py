@@ -27,7 +27,7 @@ class Settings(BaseSettings):
 
     # Sprint 2/3: LLM & Memory
     google_api_key: str | None = Field(None, env="GOOGLE_API_KEY")
-    llm_model: str = Field("gemini-1.5-flash", env="LLM_MODEL")
+    llm_model: str = Field("gemini-3.1-flash", env="LLM_MODEL")
     qdrant_url: str = Field("http://localhost:6333", env="QDRANT_URL")
     qdrant_api_key: str | None = Field(None, env="QDRANT_API_KEY")
     qdrant_collection: str = Field("memory", env="QDRANT_COLLECTION")
@@ -39,6 +39,12 @@ class Settings(BaseSettings):
     # Cap on in-memory chat history per session to bound memory growth in
     # long-running deployments (oldest messages are dropped past this limit).
     history_max_messages_per_session: int = Field(50, env="HISTORY_MAX_MESSAGES_PER_SESSION")
+
+    # ReAct orchestrator: max actions per task before forced completion, plus
+    # bounds for the per-session action trace store.
+    intent_max_steps: int = Field(20, env="INTENT_MAX_STEPS")
+    intent_max_sessions: int = Field(1000, env="INTENT_MAX_SESSIONS")
+    intent_session_ttl_seconds: int = Field(3600, env="INTENT_SESSION_TTL_SECONDS")
 
     # Feature flags for graceful degradation. Both default to True so the
     # service is production-capable; at runtime, voice further requires the

@@ -13,12 +13,14 @@ class IntentRecognizerPort(ABC):
 
     @abstractmethod
     async def recognize(
-        self, text: str, session_id: str = "default", screen=None
+        self, text: str, session_id: str = "default", screen=None, history=None
     ) -> IntentResult:
         """Interpret ``text`` and return the resolved intent.
 
         ``screen`` is an optional list of visible screen elements (each carrying
         the ScreenElement fields) so the recognizer can reason over real screen
-        structure. ``None`` keeps existing callers valid.
+        structure. ``history`` is an optional ordered list of rendered prior
+        action steps for ReAct chaining. ``None`` for either keeps existing
+        single-shot callers valid.
         """
         ...
