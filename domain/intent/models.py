@@ -21,6 +21,7 @@ class ActionType(str, Enum):
     SCROLL = "SCROLL"
     READ_SCREEN = "READ_SCREEN"
     TAP_ELEMENT = "TAP_ELEMENT"
+    TYPE_TEXT = "TYPE_TEXT"
     NONE = "NONE"
 
     @classmethod
