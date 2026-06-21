@@ -60,8 +60,9 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             return
 
         logger.info(
-            "grpc_ExecuteCommand ok peer=%s action=%s confidence=%.2f",
+            "grpc_ExecuteCommand ok peer=%s action=%s confidence=%.2f step=%d complete=%s",
             context.peer(), output.action_type, output.confidence,
+            output.step, output.task_complete,
         )
         return pb2.CommandResponse(
             success=output.success,
@@ -70,6 +71,8 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             parameters_json=json.dumps(output.parameters, ensure_ascii=False),
             confidence=output.confidence,
             requires_confirmation=output.requires_confirmation,
+            task_complete=output.task_complete,
+            step=output.step,
         )
 
     async def StreamChat(self, request, context):
