@@ -27,9 +27,8 @@ class Settings(BaseSettings):
 
     # Sprint 2/3: LLM & Memory
     google_api_key: str | None = Field(None, env="GOOGLE_API_KEY")
-    # gemini-1.5-flash is deprecated and only supports the legacy grounding API;
-    # 2.5-flash is cheaper and exposes the native google_search tool.
-    llm_model: str = Field("gemini-2.5-flash", env="LLM_MODEL")
+    # gemini-3.1-flash-lite is cheaper and exposes the native google_search tool.
+    llm_model: str = Field("gemini-3.1-flash-lite", env="LLM_MODEL")
     # IANA timezone used to tell the model the current date/time (see
     # domain/datetime_context). Default: Colombia.
     assistant_timezone: str = Field("America/Bogota", env="ASSISTANT_TIMEZONE")

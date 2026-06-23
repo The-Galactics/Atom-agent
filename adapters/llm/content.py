@@ -21,6 +21,8 @@ def extract_text(content) -> str:
                 text = block.get("text")
                 if text:
                     parts.append(text)
-        joined = "".join(parts).strip()
-        return joined if joined else str(content)
+        # No displayable text (e.g. a tool-call response whose content is an
+        # empty list, or only non-text blocks like reasoning signatures). Return
+        # empty rather than leaking the raw block structure (e.g. "[]") to clients.
+        return "".join(parts).strip()
     return str(content) if content else ""

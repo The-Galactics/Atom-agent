@@ -14,8 +14,8 @@ _GOOGLE_SEARCH_TOOL = {"google_search": {}}
 
 class GeminiAdapter(LLMPort):
     # LLM adapter backed by Google Gemini via LangChain.
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash",
-                 web_search: bool = False):
+    def __init__(self, api_key: str, model: str = "gemini-3.1-flash-lite",
+                web_search: bool = False):
         self.llm = ChatGoogleGenerativeAI(
             model=model,
             google_api_key=api_key,

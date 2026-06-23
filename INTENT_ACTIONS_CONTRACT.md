@@ -143,6 +143,6 @@ Conversation — no action:
 | Env var | Purpose |
 |---|---|
 | `GOOGLE_API_KEY` | Required — enables Gemini function calling. Absent ⇒ `ExecuteCommand` returns `UNAVAILABLE`. |
-| `LLM_MODEL` | Gemini model (default `gemini-1.5-flash`). |
+| `LLM_MODEL` | Gemini model (default `gemini-3.1-flash-lite`). |
 
 Readiness is reported under `providers.intent` in `GET /voice/health`.

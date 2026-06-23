@@ -36,19 +36,24 @@ class AppContainer:
     kokoro_client: Optional[KokoroClient]
     stt_adapter: Optional[SpeechToTextPort]
     tts_adapter: Optional[TextToSpeechPort]
-    llm_adapter: LLMPort
-    vector_store: VectorStorePort
-    embedding_adapter: EmbeddingPort
+    # LLM/memory/chat stack. All None when the Gemini provider can't be built
+    # (missing GOOGLE_API_KEY or SDK validation error) so startup degrades to
+    # voice/health endpoints instead of crashing.
+    llm_adapter: Optional[LLMPort]
+    vector_store: Optional[VectorStorePort]
+    embedding_adapter: Optional[EmbeddingPort]
     history_adapter: HistoryPort
     transcribe_use_case: Optional[TranscribeAudioUseCase]
     synthesize_use_case: Optional[SynthesizeSpeechUseCase]
-    chat_use_case: ChatUseCase
+    chat_use_case: Optional[ChatUseCase]
     # Order/intent path. None when the function-calling stack is unavailable.
     execute_command_use_case: Optional[ExecuteCommandUseCase] = None
     # Human-readable reason voice is unavailable, when applicable.
     voice_status: str = "ready"
     # Human-readable reason the intent stack is unavailable, when applicable.
     intent_status: str = "ready"
+    # Human-readable reason the LLM/chat stack is unavailable, when applicable.
+    llm_status: str = "ready"
 
     def shutdown(self) -> None:
         if self.stt_adapter is not None:
@@ -76,9 +81,14 @@ class AppContainer:
                     "detail": None if voice_ready else self.voice_status,
                 },
                 "llm": {
-                    "status": "ready" if self.settings.google_api_key else "missing_key",
+                    "status": (
+                        "ready" if self.llm_adapter is not None
+                        else "missing_key" if not self.settings.google_api_key
+                        else "unavailable"
+                    ),
                     "provider": "google/gemini",
                     "model": self.settings.llm_model,
+                    "detail": None if self.llm_adapter is not None else self.llm_status,
                 },
                 "intent": {
                     "status": "ready" if self.execute_command_use_case is not None else "unavailable",
@@ -179,40 +189,67 @@ def _build_intent_use_case(settings: Settings, chat_use_case: ChatUseCase):
         return None, f"intent provider unavailable: {exc}"
 
 
+def _build_llm_stack(settings: Settings, history_adapter: HistoryPort):
+    """Construct the LLM + semantic-memory + chat stack defensively.
+
+    Returns ``(llm_adapter, embedding_adapter, vector_store, chat_use_case,
+    status)``. All adapters are ``None`` when the Gemini provider can't be built
+    — no ``GOOGLE_API_KEY`` or an SDK validation error — so the service degrades
+    to voice/health endpoints instead of crashing at startup. The embedding
+    model and Qdrant are lazy (connected on first use), so construction is cheap.
+    """
+    if not settings.google_api_key:
+        return None, None, None, None, "llm provider unavailable: GOOGLE_API_KEY not set"
+    try:
+        llm_adapter = GeminiAdapter(
+            api_key=settings.google_api_key,
+            model=settings.llm_model,
+            web_search=settings.web_search_enabled,
+        )
+        embedding_adapter = GeminiEmbeddingAdapter(
+            api_key=settings.google_api_key,
+            model=settings.embedding_model,
+        )
+        vector_store = QdrantAdapter(
+            url=settings.qdrant_url,
+            api_key=settings.qdrant_api_key,
+            collection_name=settings.qdrant_collection,
+            embedding_port=embedding_adapter,
+            dedup_threshold=settings.memory_dedup_threshold,
+            ttl_days=settings.memory_ttl_days,
+            prune_every=settings.memory_prune_every,
+            vector_size=settings.qdrant_vector_size,
+        )
+        nodes = GraphNodes(
+            llm_adapter, vector_store,
+            memory_enabled=settings.memory_enabled,
+            memory_min_words=settings.memory_min_words,
+            timezone=settings.assistant_timezone,
+        )
+        graph = build_graph(nodes)
+        chat_use_case = ChatUseCase(graph=graph, history_adapter=history_adapter)
+        return llm_adapter, embedding_adapter, vector_store, chat_use_case, "ready"
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("llm_init_failed error=%s", exc)
+        return None, None, None, None, f"llm provider unavailable: {exc}"
+
+
 def build_container(settings: Settings) -> AppContainer:
     kokoro_client, stt_adapter, tts_adapter, voice_status = _build_voice_adapters(settings)
 
-    # Cheap to construct: embedding model and Qdrant are lazy (loaded on first use).
-    llm_adapter = GeminiAdapter(
-        api_key=settings.google_api_key or "",
-        model=settings.llm_model,
-        web_search=settings.web_search_enabled,
-    )
-    embedding_adapter = GeminiEmbeddingAdapter(
-        api_key=settings.google_api_key or "",
-        model=settings.embedding_model,
-    )
-    vector_store = QdrantAdapter(
-        url=settings.qdrant_url,
-        api_key=settings.qdrant_api_key,
-        collection_name=settings.qdrant_collection,
-        embedding_port=embedding_adapter,
-        dedup_threshold=settings.memory_dedup_threshold,
-        ttl_days=settings.memory_ttl_days,
-        prune_every=settings.memory_prune_every,
-        vector_size=settings.qdrant_vector_size,
-    )
     history_adapter = InMemoryHistoryAdapter(
         max_messages_per_session=settings.history_max_messages_per_session,
     )
 
-    nodes = GraphNodes(
-        llm_adapter, vector_store,
-        memory_enabled=settings.memory_enabled,
-        memory_min_words=settings.memory_min_words,
-        timezone=settings.assistant_timezone,
-    )
-    graph = build_graph(nodes)
+    # Built defensively: degrades to None (not a crash) when GOOGLE_API_KEY is
+    # absent or the Gemini SDK rejects the configuration.
+    (
+        llm_adapter,
+        embedding_adapter,
+        vector_store,
+        chat_use_case,
+        llm_status,
+    ) = _build_llm_stack(settings, history_adapter)
 
     # Voice use cases only exist when their adapters were constructed.
     transcribe_use_case = (
@@ -232,17 +269,16 @@ def build_container(settings: Settings) -> AppContainer:
         if tts_adapter is not None
         else None
     )
-    chat_use_case = ChatUseCase(
-        graph=graph,
-        history_adapter=history_adapter,
-    )
 
     # Built defensively: degrades to UNAVAILABLE if the provider is misconfigured.
-    # chat_use_case is injected so non-action utterances get the grounded path.
+    # chat_use_case (possibly None) is injected so non-action utterances get the
+    # grounded path when available, and degrade cleanly when it isn't.
     execute_command_use_case, intent_status = _build_intent_use_case(settings, chat_use_case)
 
     if transcribe_use_case is None or synthesize_use_case is None:
         logger.warning("voice_degraded detail=%s", voice_status)
+    if chat_use_case is None:
+        logger.warning("llm_degraded detail=%s", llm_status)
     if execute_command_use_case is None:
         logger.warning("intent_degraded detail=%s", intent_status)
 
@@ -261,4 +297,5 @@ def build_container(settings: Settings) -> AppContainer:
         execute_command_use_case=execute_command_use_case,
         voice_status=voice_status,
         intent_status=intent_status,
+        llm_status=llm_status,
     )

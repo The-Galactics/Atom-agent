@@ -64,3 +64,6 @@ qdrant_storage/
 nohup.out
 output.log
 .venv/
+
+# Coverage artifacts
+tests/coverage_html/

@@ -28,7 +28,7 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
     response becomes a conversational :class:`IntentResult` (``ActionType.NONE``).
     """
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash",
+    def __init__(self, api_key: str, model: str = "gemini-3.1-flash-lite",
                 timezone: str = "America/Bogota"):
         llm = ChatGoogleGenerativeAI(
             model=model,
