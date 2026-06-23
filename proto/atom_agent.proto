@@ -57,6 +57,10 @@ message CommandResponse {
   // When true the client should confirm with the user before executing
   // (sensitive actions such as calling or sending a message).
   bool requires_confirmation = 6;
+  // True when the ReAct task is finished; the client stops looping.
+  bool task_complete = 7;
+  // Current ReAct step index for this session (telemetry/debug).
+  int32 step = 8;
 }
 
 message MessageRequest {

@@ -21,6 +21,10 @@ _SYSTEM_PROMPT = (
     "elementos tú mismo desde el contexto, aunque ya veas la lista de elementos. "
     "Cuando el usuario quiera pulsar, abrir o interactuar con un elemento concreto, "
     "usa 'tap_element' con el texto visible exacto del elemento. "
+    "Para introducir texto en un campo de búsqueda o editable (por ejemplo escribir "
+    "una consulta), LLAMA a 'type_text' con el texto a escribir; usa 'submit: true' "
+    "para ejecutar la búsqueda. No intentes teclear pulsando elementos. Pulsa el "
+    "campo primero con 'tap_element' solo si todavía no está enfocado. "
     "Para cualquier otra orden que se corresponda con una de tus herramientas, llama "
     "a esa herramienta con los parámetros adecuados en lugar de responder con texto. "
     "Solo si el mensaje es conversación genuina (saludos, charla) y no pide una "
@@ -56,6 +60,18 @@ def _render_screen(screen) -> str:
     return "Elementos visibles en la pantalla actual:\n" + "\n".join(lines)
 
 
+def _render_history(history) -> str:
+    """Render the accumulated ReAct action trace for the model's context."""
+    trace = "\n".join(str(step) for step in history)
+    return (
+        "Acciones ya ejecutadas en esta tarea (ReAct):\n"
+        f"{trace}\n"
+        "Decide la SIGUIENTE acción para avanzar hacia el objetivo. Si el "
+        "objetivo ya está cumplido, no llames ninguna herramienta y responde "
+        "con una confirmación breve en español."
+    )
+
+
 class GeminiFunctionCallingAdapter(IntentRecognizerPort):
     """Intent recognizer backed by Google Gemini function calling.
 
@@ -64,7 +80,7 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
     response becomes a conversational :class:`IntentResult` (``ActionType.NONE``).
     """
 
-    def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-3.1-flash"):
         llm = ChatGoogleGenerativeAI(
             model=model,
             google_api_key=api_key,
@@ -74,9 +90,12 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
         self._llm = llm.bind_tools(openai_tools())
 
     async def recognize(
-        self, text: str, session_id: str = "default", screen=None
+        self, text: str, session_id: str = "default", screen=None, history=None
     ) -> IntentResult:
         messages = [("system", _SYSTEM_PROMPT), ("human", text)]
+        if history:
+            # Feed the accumulated ReAct trace so the model emits the next step.
+            messages.append(("human", _render_history(history)))
         if screen:
             # Give the model the real screen structure so it can target elements.
             messages.append(("human", _render_screen(screen)))
@@ -99,7 +118,7 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
 
         call = tool_calls[0]
         tool_name = call.get("name", "")
-        args = call.get("args", {}) or {}
+        args = dict(call.get("args", {}) or {})
         spec = spec_for_tool(tool_name)
         if spec is None:
             # Model hallucinated an unknown tool — degrade to conversation.
@@ -111,8 +130,13 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
                 raw_text=text,
             )
 
+        # type_text 'submit' defaults to true per the Android contract; fill it
+        # when the model omits the optional slot so the wire params are complete.
+        if spec.type is ActionType.TYPE_TEXT and "submit" not in args:
+            args["submit"] = True
+
         return IntentResult(
-            action=Action(type=spec.type, parameters=dict(args)),
+            action=Action(type=spec.type, parameters=args),
             reply=extract_text(response.content),
             confidence=1.0,
             requires_confirmation=spec.requires_confirmation,

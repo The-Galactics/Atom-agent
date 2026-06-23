@@ -168,6 +168,24 @@ ACTION_CATALOG: tuple[ActionSpec, ...] = (
         ),
         requires_confirmation=True,
     ),
+    ActionSpec(
+        type=ActionType.TYPE_TEXT,
+        tool_name="type_text",
+        description=(
+            "Escribe texto en el campo editable o de búsqueda que está enfocado en "
+            "la pantalla, p. ej. para introducir una consulta de búsqueda. Úsala en "
+            "lugar de intentar 'teclear' pulsando elementos. Pon 'submit' en true "
+            "para confirmar/ejecutar la búsqueda tras escribir."
+        ),
+        parameters=(
+            ParameterSpec("text", "string", "Texto a escribir en el campo, p. ej. la consulta de búsqueda."),
+            ParameterSpec(
+                "submit", "boolean",
+                "Si es true (por defecto), confirma/envía tras escribir, p. ej. ejecuta la búsqueda.",
+                required=False,
+            ),
+        ),
+    ),
 )
 
 # Lookups keyed both ways so adapters/use-cases never hard-code action names.

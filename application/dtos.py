@@ -69,3 +69,7 @@ class ExecuteCommandOutputDTO:
     parameters: dict
     confidence: float = 0.0
     requires_confirmation: bool = False
+    # True when the ReAct task is finished; the client stops looping.
+    task_complete: bool = False
+    # Current ReAct step index for this session (telemetry/debug).
+    step: int = 0
