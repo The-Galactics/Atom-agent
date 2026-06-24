@@ -68,22 +68,10 @@ class ExecuteCommandUseCase:
                 screen=input_dto.screen_elements,
             )
 
-        # Conversational turn (no device action): route through the grounded
-        # chat path so the user gets live web info + memory, not the router's
-        # bare reply. Falls back to the router's reply if chat isn't wired.
-        if result.action.type is ActionType.NONE and self.chat_use_case is not None:
-            chat_output = await self.chat_use_case.execute(
-                ChatInputDTO(text=input_dto.text, session_id=input_dto.user_id)
-            )
-            return ExecuteCommandOutputDTO(
-                success=bool(chat_output.text),
-                reply_text=chat_output.text,
-                action_type=ActionType.NONE.value,
-                parameters={},
-                confidence=result.confidence,
-                requires_confirmation=False,
-            )
-
+        # Conversational turn (no device action): the recognizer's reply is
+        # returned as-is and the action is NONE. The client re-routes these to
+        # the StreamChat RPC, which runs the grounded chat path (live web info +
+        # memory); answering conversationally here too would only duplicate it.
         reply = result.reply
         if not reply and result.action.is_executable:
             # Default spoken confirmation for a bare tool call with no text.

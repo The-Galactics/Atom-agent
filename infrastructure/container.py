@@ -159,14 +159,14 @@ def _build_voice_adapters(settings: Settings):
     return kokoro_client, stt_adapter, tts_adapter, status
 
 
-def _build_intent_use_case(settings: Settings, chat_use_case: ChatUseCase):
+def _build_intent_use_case(settings: Settings):
     """Construct the order/intent use case defensively.
 
     Returns (use_case, status). ``use_case`` is ``None`` when the function-
     calling provider can't be built (missing ``langchain-google-genai``,
-    absent API key, etc.), so the order endpoint degrades gracefully. The chat
-    use case is injected so conversational (non-action) utterances are answered
-    by the grounded chat path instead of the router's context-free reply.
+    absent API key, etc.), so the order endpoint degrades gracefully.
+    Conversational (non-action) utterances resolve to a ``NONE`` action here;
+    the client re-routes those to the StreamChat RPC for the grounded reply.
     """
     if not settings.google_api_key:
         return None, "intent provider unavailable: GOOGLE_API_KEY not set"
@@ -278,9 +278,9 @@ def build_container(settings: Settings) -> AppContainer:
     )
 
     # Built defensively: degrades to UNAVAILABLE if the provider is misconfigured.
-    # chat_use_case (possibly None) is injected so non-action utterances get the
-    # grounded path when available, and degrade cleanly when it isn't.
-    execute_command_use_case, intent_status = _build_intent_use_case(settings, chat_use_case)
+    # Non-action utterances resolve to a NONE action; the client re-routes those
+    # to StreamChat (which uses chat_use_case) for the grounded reply.
+    execute_command_use_case, intent_status = _build_intent_use_case(settings)
 
     if transcribe_use_case is None or synthesize_use_case is None:
         logger.warning("voice_degraded detail=%s", voice_status)

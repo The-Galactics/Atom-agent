@@ -82,11 +82,22 @@ ACTION_CATALOG: tuple[ActionSpec, ...] = (
     ActionSpec(
         type=ActionType.SEND_MESSAGE,
         tool_name="send_message",
-        description="Envía un mensaje de texto a un contacto.",
+        description=(
+            "Envía un mensaje a un contacto enrutándolo directamente a la app indicada por "
+            "'app': 'whatsapp'/'telegram' abren esa app de mensajería instantánea, y 'sms' "
+            "abre la app nativa de SMS. Para peticiones de mensajería prefiere 'whatsapp'."
+        ),
         parameters=(
             ParameterSpec("recipient", "string", "Nombre del contacto o número destinatario."),
             ParameterSpec("body", "string", "Contenido del mensaje a enviar."),
-            ParameterSpec("app", "string", "App de mensajería opcional, p. ej. 'whatsapp', 'sms'.", required=False),
+            ParameterSpec(
+                "app",
+                "string",
+                "App destino del mensaje (opcional): 'whatsapp' o 'telegram' abren esa app de "
+                "mensajería instantánea directamente; 'sms' abre la app nativa de SMS. Para "
+                "peticiones de mensajería prefiere 'whatsapp'.",
+                required=False,
+            ),
         ),
         requires_confirmation=True,
     ),
@@ -95,7 +106,12 @@ ACTION_CATALOG: tuple[ActionSpec, ...] = (
         tool_name="set_alarm",
         description="Programa una alarma a una hora concreta.",
         parameters=(
-            ParameterSpec("time", "string", "Hora de la alarma en formato 24h 'HH:MM'."),
+            ParameterSpec(
+                "time",
+                "string",
+                "Hora en formato 24h 'HH:MM' con dígitos, p. ej. '07:30' o '23:00'. "
+                "Nunca uses palabras como 'mediodía'; conviértelas a dígitos (mediodía = '12:00').",
+            ),
             ParameterSpec("label", "string", "Etiqueta opcional de la alarma.", required=False),
         ),
     ),
@@ -104,7 +120,12 @@ ACTION_CATALOG: tuple[ActionSpec, ...] = (
         tool_name="set_timer",
         description="Inicia un temporizador con una duración dada.",
         parameters=(
-            ParameterSpec("duration_seconds", "integer", "Duración del temporizador en segundos."),
+            ParameterSpec(
+                "duration_seconds",
+                "integer",
+                "Duración total en SEGUNDOS como número entero, p. ej. '300' para 5 minutos. "
+                "Convierte minutos/horas a segundos; nunca uses texto.",
+            ),
             ParameterSpec("label", "string", "Etiqueta opcional del temporizador.", required=False),
         ),
     ),
