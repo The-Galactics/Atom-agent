@@ -54,9 +54,7 @@ def test_shutdown_is_safe_without_voice_adapters():
 
 
 def test_intent_use_case_unavailable_without_api_key():
-    use_case, status = _build_intent_use_case(
-        _settings(google_api_key=None), chat_use_case=None
-    )
+    use_case, status = _build_intent_use_case(_settings(google_api_key=None))
     assert use_case is None
     assert "GOOGLE_API_KEY" in status
 

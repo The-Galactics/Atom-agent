@@ -95,7 +95,10 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
     async def recognize(
         self, text: str, session_id: str = "default", screen=None, history=None
     ) -> IntentResult:
-        messages = [("system", _SYSTEM_PROMPT), ("human", text)]
+        # Prepend the real current date/time so the model answers date/day/time
+        # questions with the present instead of a training-time guess.
+        system_prompt = f"{current_datetime_sentence(self._timezone)}\n\n{_SYSTEM_PROMPT}"
+        messages = [("system", system_prompt), ("human", text)]
         if history:
             # Feed the accumulated ReAct trace so the model emits the next step.
             messages.append(("human", _render_history(history)))
