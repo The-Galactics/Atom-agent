@@ -87,6 +87,19 @@ def test_type_text_action_is_registered():
     assert spec.requires_confirmation is False
 
 
+def test_alarm_and_timer_param_descriptions_steer_parseable_values():
+    # B4 defense-in-depth: at temperature 0 the catalog param descriptions steer
+    # the model to emit values the Android side can parse with parseInt/parseDouble,
+    # so non-numeric input ("mediodía", "cinco minutos") rarely reaches the device.
+    alarm = spec_for_tool("set_alarm")
+    time_param = next(p for p in alarm.parameters if p.name == "time")
+    assert "HH:MM" in time_param.description
+
+    timer = spec_for_tool("set_timer")
+    duration_param = next(p for p in timer.parameters if p.name == "duration_seconds")
+    assert "SEGUNDOS" in duration_param.description
+
+
 def test_type_text_tool_schema_exposes_text_and_optional_submit():
     fn = {t["function"]["name"]: t["function"] for t in openai_tools()}["type_text"]
     props = fn["parameters"]["properties"]
