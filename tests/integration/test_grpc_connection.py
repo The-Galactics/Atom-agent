@@ -245,6 +245,21 @@ def test_grpc_stream_chat_internal_when_use_case_raises():
     asyncio.run(_with_stub(container, _scenario))
 
 
+def test_grpc_stream_chat_unavailable_when_use_case_missing():
+    async def _scenario(stub):
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            async for _chunk in stub.StreamChat(
+                pb2.MessageRequest(user_id="user_001", chat_id="chat_001", message="hola")
+            ):
+                pass
+
+        assert exc_info.value.code() == grpc.StatusCode.UNAVAILABLE
+        assert "LLM provider unavailable: llm stack offline" in exc_info.value.details()
+
+    container = _make_container(chat_use_case=None, llm_status="llm stack offline")
+    asyncio.run(_with_stub(container, _scenario))
+
+
 def test_grpc_transcribe_unavailable_when_use_case_missing():
     async def _scenario(stub):
         with pytest.raises(grpc.aio.AioRpcError) as exc_info:

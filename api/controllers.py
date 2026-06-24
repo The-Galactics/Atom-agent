@@ -38,12 +38,21 @@ def create_chat_router(chat_use_case_provider: UseCaseProviderChat) -> APIRouter
         request: ChatRequest,
         x_request_id: str | None = Header(None, alias="X-Request-Id"),
     ) -> ChatResponse:
+        # Resolve outside the try so a missing provider degrades to 503, not 500.
+        use_case = _resolve_chat_use_case()
+        if use_case is None:
+            raise HTTPException(
+                status_code=503,
+                detail=_error_detail(
+                    "CHAT_UNAVAILABLE", "LLM provider unavailable", x_request_id
+                ),
+            )
         try:
             input_dto = ChatInputDTO(
                 text=request.text,
                 session_id=request.session_id,
             )
-            output = await _resolve_chat_use_case().execute(input_dto)
+            output = await use_case.execute(input_dto)
             return ChatResponse(text=output.text, session_id=output.session_id)
         except Exception as exc:
             raise HTTPException(

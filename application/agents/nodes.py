@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from domain.conversation.models import ChatMessage
+from domain.datetime_context import current_datetime_sentence
 from domain.memory.importance import is_memorable
 from application.agents.state import AgentState
 from ports.llm_port import LLMPort
@@ -13,11 +14,13 @@ logger = logging.getLogger("voice_module")
 class GraphNodes:
     # LangGraph node implementations for chat orchestration.
     def __init__(self, llm_port: LLMPort, vector_store_port: VectorStorePort,
-                 memory_enabled: bool = True, memory_min_words: int = 4):
+                 memory_enabled: bool = True, memory_min_words: int = 4,
+                 timezone: str = "America/Bogota"):
         self.llm = llm_port
         self.vector_store = vector_store_port
         self.memory_enabled = memory_enabled
         self.memory_min_words = memory_min_words
+        self.timezone = timezone
         # Keeps strong refs to fire-and-forget store tasks so they aren't GC'd.
         self._bg_tasks: set[asyncio.Task] = set()
 
@@ -46,10 +49,14 @@ class GraphNodes:
 
     async def generate_response(self, state: AgentState) -> dict:
         """Generates a response using Gemma and the retrieved context."""
-        # System prompt injects retrieved semantic context.
+        # System prompt injects the current date/time (the model has no clock)
+        # plus any retrieved semantic context.
         system_msg = ChatMessage(
             role="system",
-            content=f"Eres Atom. Contexto relevante:\n{state['context']}"
+            content=(
+                f"Eres Atom. {current_datetime_sentence(self.timezone)}\n"
+                f"Contexto relevante:\n{state['context']}"
+            )
         )
         user_msg = ChatMessage(role="user", content=state["input"])
 

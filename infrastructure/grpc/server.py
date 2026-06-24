@@ -81,9 +81,17 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             "grpc_StreamChat peer=%s user_id=%s message=%r",
             context.peer(), request.user_id, request.message,
         )
+        use_case = self.container.chat_use_case
+        if use_case is None:
+            logger.warning("grpc_StreamChat unavailable peer=%s", context.peer())
+            await context.abort(
+                grpc.StatusCode.UNAVAILABLE,
+                f"LLM provider unavailable: {self.container.llm_status}",
+            )
+            return
         try:
             input_dto = ChatInputDTO(text=request.message, session_id=request.user_id)
-            output = await self.container.chat_use_case.execute(input_dto)
+            output = await use_case.execute(input_dto)
         except Exception as exc:
             logger.exception("grpc_StreamChat failed peer=%s", context.peer())
             await context.abort(grpc.StatusCode.INTERNAL, f"chat failed: {exc}")

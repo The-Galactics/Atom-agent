@@ -1,17 +1,28 @@
+import logging
+
 from langchain_google_genai import ChatGoogleGenerativeAI
 from adapters.llm.content import extract_text
 from domain.conversation.models import ChatMessage
 from ports.llm_port import LLMPort
 
+logger = logging.getLogger("voice_module")
+
+# Native Gemini 2.x grounding tool. Passed at invoke time so the model decides
+# per-turn whether a web lookup is warranted (a greeting won't trigger a search).
+_GOOGLE_SEARCH_TOOL = {"google_search": {}}
+
 
 class GeminiAdapter(LLMPort):
     # LLM adapter backed by Google Gemini via LangChain.
-    def __init__(self, api_key: str, model: str = "gemini-1.5-flash"):
+    def __init__(self, api_key: str, model: str = "gemini-3.1-flash-lite",
+                web_search: bool = False):
         self.llm = ChatGoogleGenerativeAI(
             model=model,
             google_api_key=api_key,
             temperature=0.7,
         )
+        # Grounding requires a Gemini 2.x model + a recent langchain-google-genai.
+        self.web_search = web_search
 
     async def chat(self, messages: list[ChatMessage]) -> ChatMessage:
         # Translate internal messages into LangChain tuple format.
@@ -19,5 +30,23 @@ class GeminiAdapter(LLMPort):
             ("system" if m.role == "system" else "human" if m.role == "user" else "ai", m.content)
             for m in messages
         ]
-        response = await self.llm.ainvoke(langchain_messages)
+        response = await self._invoke(langchain_messages)
         return ChatMessage(role="assistant", content=extract_text(response.content))
+
+    async def _invoke(self, langchain_messages):
+        """Invoke the model, grounding with Google Search when enabled.
+
+        Grounding is best-effort: if the installed model/library rejects the
+        google_search tool we log once and fall back to an ungrounded call so a
+        misconfiguration degrades the answer quality instead of breaking chat.
+        """
+        if self.web_search:
+            try:
+                return await self.llm.ainvoke(
+                    langchain_messages, tools=[_GOOGLE_SEARCH_TOOL]
+                )
+            except Exception as exc:  # noqa: BLE001 - degrade, don't fail the turn
+                logger.warning(
+                    "web_search_grounding_failed falling_back_ungrounded error=%s", exc
+                )
+        return await self.llm.ainvoke(langchain_messages)

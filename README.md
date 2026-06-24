@@ -45,7 +45,7 @@ Create a `.env` file based on the following template:
 ```env
 # Google Gemini
 GOOGLE_API_KEY=your_google_key_here
-LLM_MODEL=gemini-1.5-flash
+LLM_MODEL=gemini-3.1-flash-lite
 EMBEDDING_MODEL=models/text-embedding-004
 
 # Qdrant
