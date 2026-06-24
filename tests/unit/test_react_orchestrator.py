@@ -82,6 +82,32 @@ def test_tap_type_tap_sequence_not_collapsed_by_anti_repeat_guard():
     assert len(store.get("u")) == 3
 
 
+def test_false_search_bar_taps_before_typing():
+    # Two-snapshot exploratory contract: turn 1 the search bar is a NON-editable
+    # container (clickable only) -> orchestrator emits TAP_ELEMENT; turn 2 a focused
+    # editable input exists -> orchestrator emits TYPE_TEXT. Locks the TAP->TYPE
+    # chaining at the orchestrator seam. NOTE: the live LLM is not invoked here, so
+    # this does not prove the prompt rule itself — only the chaining behavior.
+    store = SessionStore(max_steps_per_session=20)
+    recognizer = ScriptedRecognizer([_tap("Buscar"), _type_text("pikachu")])
+    use_case = ExecuteCommandUseCase(intent_recognizer=recognizer, session_store=store)
+
+    false_bar = [{"index": 0, "role": "Button", "text": "Buscar", "clickable": True}]
+    out1 = _run(use_case.execute(
+        ExecuteCommandInputDTO(text="busca pikachu", user_id="u", screen_elements=false_bar)))
+    assert out1.action_type == "TAP_ELEMENT"
+    assert out1.task_complete is False
+
+    active_input = [{"index": 0, "role": "EditText", "text": "", "editable": True, "focusable": True}]
+    out2 = _run(use_case.execute(
+        ExecuteCommandInputDTO(text="busca pikachu", user_id="u", screen_elements=active_input)))
+    assert out2.action_type == "TYPE_TEXT"
+    assert out2.parameters == {"text": "pikachu", "submit": True}
+    assert out2.task_complete is False
+    # Turn 2 carried the recorded TAP step as history.
+    assert recognizer.calls[1]["history"] == ["Step 1: TAP_ELEMENT {'text': 'Buscar'}"]
+
+
 def test_multi_step_chain_accumulates_then_completes():
     store = SessionStore(max_steps_per_session=20)
     recognizer = ScriptedRecognizer([_open_app(), _tap(), _done("He buscado el vídeo.")])
