@@ -1,13 +1,5 @@
-<<<<<<< HEAD
-from application.dtos import (
-    ChatInputDTO,
-    ExecuteCommandInputDTO,
-    ExecuteCommandOutputDTO,
-)
-=======
 from application.agents.session_store import SessionStore
 from application.dtos import ExecuteCommandInputDTO, ExecuteCommandOutputDTO
->>>>>>> develop
 from domain.intent.models import ActionType
 from ports.intent_port import IntentRecognizerPort
 
@@ -19,21 +11,6 @@ STUCK_REPEAT_THRESHOLD = 2
 class ExecuteCommandUseCase:
     """Step-wise ReAct orchestrator for the order/intent path.
 
-<<<<<<< HEAD
-    This is the "order" path (gRPC ``ExecuteCommand``). The intent recognizer
-    acts purely as a router: if the utterance maps to a device action it is
-    returned for the client to execute; otherwise it is a conversational turn
-    and — when a chat use case is wired — we delegate to it so the reply gets
-    web grounding, memory and history instead of the router's context-free
-    answer. Recognition lives behind :class:`IntentRecognizerPort`, so the LLM
-    is fully mockable in tests.
-    """
-
-    def __init__(self, intent_recognizer: IntentRecognizerPort, chat_use_case=None):
-        self.intent_recognizer = intent_recognizer
-        # Optional: grounded conversational path for non-action utterances.
-        self.chat_use_case = chat_use_case
-=======
     Each ``execute`` call is exactly one ReAct step: load the session's prior
     action trace, ask the recognizer for the next action given the live screen
     and that history, then record it. The loop is distributed across gRPC calls
@@ -52,7 +29,6 @@ class ExecuteCommandUseCase:
         self.intent_recognizer = intent_recognizer
         self.session_store = session_store or SessionStore(max_steps_per_session=max_steps)
         self.max_steps = max_steps
->>>>>>> develop
 
     async def execute(self, input_dto: ExecuteCommandInputDTO) -> ExecuteCommandOutputDTO:
         session_id = input_dto.user_id
