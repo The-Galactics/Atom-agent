@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 
 @dataclass
@@ -57,6 +57,8 @@ class ChatOutputDTO:
 class ExecuteCommandInputDTO:
     text: str
     user_id: str = "default"
+    # Structured screen snapshot from the client when accessibility is enabled.
+    screen_elements: list = field(default_factory=list)
 
 
 @dataclass
@@ -67,3 +69,7 @@ class ExecuteCommandOutputDTO:
     parameters: dict
     confidence: float = 0.0
     requires_confirmation: bool = False
+    # True when the ReAct task is finished; the client stops looping.
+    task_complete: bool = False
+    # Current ReAct step index for this session (telemetry/debug).
+    step: int = 0

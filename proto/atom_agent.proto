@@ -24,9 +24,23 @@ service AtomAgentService {
 
 // --- Chat Messages ---
 
+// One on-screen node captured by the Android accessibility service, typed so the
+// model reasons over screen structure without text-parsing overhead.
+message ScreenElement {
+  string text = 1;        // visible text or content description
+  string role = 2;        // short widget class: Button, EditText, TextView, ...
+  bool clickable = 3;
+  bool focusable = 4;
+  bool editable = 5;
+  bool scrollable = 6;
+  int32 index = 7;        // stable ordinal for unambiguous target resolution
+}
+
 message CommandRequest {
   string user_id = 1;
   string command = 2;
+  // Current on-screen map; empty when the accessibility service is disabled.
+  repeated ScreenElement screen_elements = 3;
 }
 
 message CommandResponse {
@@ -43,6 +57,10 @@ message CommandResponse {
   // When true the client should confirm with the user before executing
   // (sensitive actions such as calling or sending a message).
   bool requires_confirmation = 6;
+  // True when the ReAct task is finished; the client stops looping.
+  bool task_complete = 7;
+  // Current ReAct step index for this session (telemetry/debug).
+  int32 step = 8;
 }
 
 message MessageRequest {

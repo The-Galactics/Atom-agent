@@ -14,6 +14,20 @@ from application.dtos import (
 
 logger = logging.getLogger("voice_module")
 
+
+def _to_screen(e):
+    # Proto ScreenElement -> plain dict the recognizer can render.
+    return {
+        "text": e.text,
+        "role": e.role,
+        "clickable": e.clickable,
+        "focusable": e.focusable,
+        "editable": e.editable,
+        "scrollable": e.scrollable,
+        "index": e.index,
+    }
+
+
 class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
     def __init__(self, container):
         self.container = container
@@ -34,7 +48,11 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             return
 
         try:
-            input_dto = ExecuteCommandInputDTO(text=request.command, user_id=request.user_id)
+            input_dto = ExecuteCommandInputDTO(
+                text=request.command,
+                user_id=request.user_id,
+                screen_elements=[_to_screen(e) for e in request.screen_elements],
+            )
             output = await use_case.execute(input_dto)
         except Exception as exc:
             logger.exception("grpc_ExecuteCommand failed peer=%s", context.peer())
@@ -42,8 +60,9 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             return
 
         logger.info(
-            "grpc_ExecuteCommand ok peer=%s action=%s confidence=%.2f",
+            "grpc_ExecuteCommand ok peer=%s action=%s confidence=%.2f step=%d complete=%s",
             context.peer(), output.action_type, output.confidence,
+            output.step, output.task_complete,
         )
         return pb2.CommandResponse(
             success=output.success,
@@ -52,6 +71,8 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             parameters_json=json.dumps(output.parameters, ensure_ascii=False),
             confidence=output.confidence,
             requires_confirmation=output.requires_confirmation,
+            task_complete=output.task_complete,
+            step=output.step,
         )
 
     async def StreamChat(self, request, context):

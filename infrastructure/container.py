@@ -12,6 +12,7 @@ from adapters.vector_store.qdrant_adapter import QdrantAdapter
 from adapters.history.in_memory_history_adapter import InMemoryHistoryAdapter
 from application.agents.nodes import GraphNodes
 from application.agents.graph import build_graph
+from application.agents.session_store import SessionStore
 from application.use_cases.chat import ChatUseCase
 from application.use_cases.execute_command import ExecuteCommandUseCase
 from application.use_cases.synthesize_speech import SynthesizeSpeechUseCase
@@ -179,9 +180,15 @@ def _build_intent_use_case(settings: Settings, chat_use_case: ChatUseCase):
             model=settings.llm_model,
             timezone=settings.assistant_timezone,
         )
+        session_store = SessionStore(
+            max_steps_per_session=settings.intent_max_steps,
+            max_sessions=settings.intent_max_sessions,
+            ttl_seconds=settings.intent_session_ttl_seconds,
+        )
         use_case = ExecuteCommandUseCase(
             intent_recognizer=recognizer,
-            chat_use_case=chat_use_case,
+            session_store=session_store,
+            max_steps=settings.intent_max_steps,
         )
         return use_case, "ready"
     except Exception as exc:  # pragma: no cover - defensive
