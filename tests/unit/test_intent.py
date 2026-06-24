@@ -1,6 +1,7 @@
 import asyncio
 from unittest.mock import patch
 
+from adapters.intent.gemini_function_calling_adapter import _SYSTEM_PROMPT
 from application.dtos import ExecuteCommandInputDTO
 from application.use_cases.execute_command import ExecuteCommandUseCase
 from domain.intent.catalog import ACTION_CATALOG, openai_tools, spec_for_tool
@@ -327,6 +328,24 @@ def test_system_prompt_instructs_type_text_for_input_fields():
     # Mentions submit-to-run-the-search and the editable/search field intent.
     assert "submit" in prompt
     assert "búsqueda" in prompt or "editable" in prompt
+
+
+def test_system_prompt_contains_fake_search_bar_rule():
+    # The "Interactive UI Illusion Rule" must be present so the model taps a
+    # non-editable search container before trying to type into it.
+    assert "BARRAS DE BÚSQUEDA FALSAS" in _SYSTEM_PROMPT
+    assert "tap_element" in _SYSTEM_PROMPT
+    assert "turno inmediato siguiente" in _SYSTEM_PROMPT
+
+
+def test_system_prompt_prioritizes_instant_messaging_over_sms():
+    import adapters.intent.gemini_function_calling_adapter as mod
+    prompt = mod._SYSTEM_PROMPT
+    assert "REGLA DE PRIORIDAD DE MENSAJERÍA" in prompt
+    assert "PROHIBIDO" in prompt
+    assert "send_message" in prompt
+    assert "app='whatsapp'" in prompt
+    assert "NUNCA ejecutes además un `OPEN_APP`" in prompt
 
 
 def test_system_prompt_mandates_read_screen_tool():

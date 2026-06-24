@@ -82,11 +82,22 @@ ACTION_CATALOG: tuple[ActionSpec, ...] = (
     ActionSpec(
         type=ActionType.SEND_MESSAGE,
         tool_name="send_message",
-        description="Envía un mensaje de texto a un contacto.",
+        description=(
+            "Envía un mensaje a un contacto enrutándolo directamente a la app indicada por "
+            "'app': 'whatsapp'/'telegram' abren esa app de mensajería instantánea, y 'sms' "
+            "abre la app nativa de SMS. Para peticiones de mensajería prefiere 'whatsapp'."
+        ),
         parameters=(
             ParameterSpec("recipient", "string", "Nombre del contacto o número destinatario."),
             ParameterSpec("body", "string", "Contenido del mensaje a enviar."),
-            ParameterSpec("app", "string", "App de mensajería opcional, p. ej. 'whatsapp', 'sms'.", required=False),
+            ParameterSpec(
+                "app",
+                "string",
+                "App destino del mensaje (opcional): 'whatsapp' o 'telegram' abren esa app de "
+                "mensajería instantánea directamente; 'sms' abre la app nativa de SMS. Para "
+                "peticiones de mensajería prefiere 'whatsapp'.",
+                required=False,
+            ),
         ),
         requires_confirmation=True,
     ),
