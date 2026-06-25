@@ -44,6 +44,21 @@ _SYSTEM_PROMPT = (
     "el usuario pide explícitamente un SMS. NUNCA ejecutes además un `OPEN_APP` "
     "para abrir la app de mensajería: una sola llamada a `send_message` con el "
     "parámetro `app` correcto es suficiente. "
+    "FALLBACK DE BÚSQUEDA EN WHATSAPP: Tras intentar enviar un mensaje con "
+    "`send_message`, si en el SIGUIENTE turno la pantalla muestra la pantalla de "
+    "inicio o la LISTA DE CHATS de WhatsApp (un campo de búsqueda y varias filas de "
+    "chat) en lugar de una conversación abierta con su caja de texto, significa que "
+    "el contacto no se pudo abrir (no está en la agenda o sin número internacional "
+    "válido). WhatsApp YA estará abierto en ese turno (lo abre la app cliente "
+    "automáticamente), así que NUNCA emitas OPEN_APP para abrir WhatsApp: recupérate "
+    "únicamente con `tap_element` y `type_text` sobre la pantalla ya visible, en "
+    "coherencia con la regla anterior. NO abortes el bucle ReAct: cambia de "
+    "estrategia. Pulsa el icono de la "
+    "lupa/buscar con `tap_element`, escribe el nombre del contacto con `type_text` "
+    "(submit: false), selecciona la FILA del chat correspondiente en los resultados "
+    "con `tap_element` (la fila del chat, nunca la foto de perfil), escribe el cuerpo "
+    "del mensaje con `type_text` y envíalo. Cuando la conversación esté abierta y el "
+    "mensaje enviado, termina la tarea. "
     "Solo si el mensaje es conversación genuina (saludos, charla) y no pide una "
     "acción ni leer la pantalla, responde con naturalidad en español sin llamar "
     "ninguna herramienta."
@@ -51,6 +66,25 @@ _SYSTEM_PROMPT = (
 
 # Cap rendered elements to bound prompt tokens.
 _MAX_SCREEN_LINES = 80
+
+# Text markers identifying decorative profile-photo/avatar elements (unaccented;
+# the Spanish strings of interest carry no accents, so casefold matching suffices).
+_AVATAR_MARKERS = (
+    "foto de perfil", "foto del perfil", "imagen de perfil",
+    "avatar", "profile picture", "profile photo",
+)
+
+
+def _is_avatar_element(el) -> bool:
+    """True when an element's text names a decorative profile photo/avatar."""
+    text = (_attr(el, "text") or "").casefold()
+    return any(marker in text for marker in _AVATAR_MARKERS)
+
+
+def _sanitize_screen(screen) -> list:
+    """Drop decorative avatar/profile-photo elements, preserving order and the
+    rest of the elements untouched, so the model never targets a profile photo."""
+    return [el for el in screen if not _is_avatar_element(el)]
 
 
 def _attr(el, name):
@@ -119,8 +153,11 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
             # Feed the accumulated ReAct trace so the model emits the next step.
             messages.append(("human", _render_history(history)))
         if screen:
-            # Give the model the real screen structure so it can target elements.
-            messages.append(("human", _render_screen(screen)))
+            # Give the model the real screen structure so it can target elements,
+            # minus decorative avatars it would otherwise loop on tapping.
+            cleaned = _sanitize_screen(screen)
+            if cleaned:
+                messages.append(("human", _render_screen(cleaned)))
         try:
             response = await self._llm.ainvoke(messages)
         except Exception as exc:  # noqa: BLE001 - surface provider failures uniformly
