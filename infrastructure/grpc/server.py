@@ -11,6 +11,13 @@ from application.dtos import (
     TranscribeAudioInputDTO,
     SynthesizeSpeechInputDTO,
 )
+from domain.errors import (
+    AuthenticationError,
+    DomainValidationError,
+    InvalidTokenError,
+    UserAlreadyExistsError,
+)
+from infrastructure.grpc.auth_interceptor import AuthInterceptor, principal_from_context
 
 logger = logging.getLogger("voice_module")
 
@@ -28,9 +35,76 @@ def _to_screen(e):
     }
 
 
+def _auth_response(pair):
+    # domain TokenPair -> proto AuthResponse
+    return pb2.AuthResponse(
+        access_token=pair.access_token,
+        refresh_token=pair.refresh_token,
+        expires_in=pair.expires_in,
+        user_id=pair.user_id,
+    )
+
+
 class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
     def __init__(self, container):
         self.container = container
+
+    # --- Auth (public RPCs; the interceptor lets them through without a token) ---
+
+    async def Register(self, request, context):
+        use_case = self.container.register_use_case
+        if use_case is None:
+            await context.abort(grpc.StatusCode.UNAVAILABLE,
+                                f"auth unavailable: {self.container.auth_status}")
+            return
+        try:
+            pair = await use_case.execute(request.email, request.password, request.display_name)
+        except UserAlreadyExistsError:
+            await context.abort(grpc.StatusCode.ALREADY_EXISTS, "email already registered")
+            return
+        except DomainValidationError:
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "invalid email or password")
+            return
+        return _auth_response(pair)
+
+    async def Login(self, request, context):
+        use_case = self.container.authenticate_use_case
+        if use_case is None:
+            await context.abort(grpc.StatusCode.UNAVAILABLE,
+                                f"auth unavailable: {self.container.auth_status}")
+            return
+        try:
+            pair = await use_case.execute(request.email, request.password)
+        except AuthenticationError:
+            # Generic — never reveal whether the email exists (anti-enumeration).
+            await context.abort(grpc.StatusCode.UNAUTHENTICATED, "invalid credentials")
+            return
+        return _auth_response(pair)
+
+    async def AuthenticateWithGoogle(self, request, context):
+        use_case = self.container.authenticate_with_google_use_case
+        if use_case is None:
+            await context.abort(grpc.StatusCode.UNAVAILABLE, "google sign-in unavailable")
+            return
+        try:
+            pair = await use_case.execute(request.id_token)
+        except AuthenticationError:
+            await context.abort(grpc.StatusCode.UNAUTHENTICATED, "invalid google token")
+            return
+        return _auth_response(pair)
+
+    async def RefreshToken(self, request, context):
+        use_case = self.container.refresh_session_use_case
+        if use_case is None:
+            await context.abort(grpc.StatusCode.UNAVAILABLE,
+                                f"auth unavailable: {self.container.auth_status}")
+            return
+        try:
+            pair = await use_case.execute(request.refresh_token)
+        except InvalidTokenError:
+            await context.abort(grpc.StatusCode.UNAUTHENTICATED, "invalid refresh token")
+            return
+        return _auth_response(pair)
 
     async def ExecuteCommand(self, request, context):
 
@@ -48,9 +122,12 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             return
 
         try:
+            # Identity comes from the verified token, NOT request.user_id (deprecated).
+            principal = principal_from_context(getattr(self.container, "token_service", None), context)
+            user_id = principal.user_id if principal else request.user_id
             input_dto = ExecuteCommandInputDTO(
                 text=request.command,
-                user_id=request.user_id,
+                user_id=user_id,
                 screen_elements=[_to_screen(e) for e in request.screen_elements],
             )
             output = await use_case.execute(input_dto)
@@ -90,7 +167,10 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             )
             return
         try:
-            input_dto = ChatInputDTO(text=request.message, session_id=request.user_id)
+            # Identity comes from the verified token, NOT request.user_id (deprecated).
+            principal = principal_from_context(getattr(self.container, "token_service", None), context)
+            session_id = principal.user_id if principal else request.user_id
+            input_dto = ChatInputDTO(text=request.message, session_id=session_id)
             output = await use_case.execute(input_dto)
         except Exception as exc:
             logger.exception("grpc_StreamChat failed peer=%s", context.peer())
@@ -159,10 +239,28 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
         )
 
 async def serve(container, port: int = 50051):
-    
-    server = grpc.aio.server()
+    # Enforce auth on protected RPCs (public auth RPCs pass through).
+    server = grpc.aio.server(interceptors=[AuthInterceptor(container.token_service)])
     pb2_grpc.add_AtomAgentServiceServicer_to_server(AtomGrpcService(container), server)
-    server.add_insecure_port(f'[::]:{port}')
-    print(f"gRPC Server started on port {port}")
+
+    settings = container.settings
+    cert, key = settings.tls_cert_path, settings.tls_key_path
+    if cert and key:
+        with open(key, "rb") as k, open(cert, "rb") as c:
+            credentials = grpc.ssl_server_credentials([(k.read(), c.read())])
+        server.add_secure_port(f"[::]:{port}", credentials)
+        logger.info("gRPC server (TLS) started on port %d", port)
+    elif settings.app_env.lower() in ("production", "prod"):
+        # Guardrail: never serve cleartext gRPC in production.
+        raise RuntimeError(
+            "Refusing to start gRPC without TLS while APP_ENV=production. "
+            "Set TLS_CERT_PATH and TLS_KEY_PATH (or run with APP_ENV=development for local dev)."
+        )
+    else:
+        # Development only: no transport encryption. Configure TLS_CERT_PATH /
+        # TLS_KEY_PATH for any real deployment.
+        server.add_insecure_port(f"[::]:{port}")
+        logger.warning("gRPC server started INSECURE (no TLS) on port %d — dev only", port)
+
     await server.start()
     await server.wait_for_termination()

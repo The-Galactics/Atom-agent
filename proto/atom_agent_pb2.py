@@ -24,7 +24,7 @@ _sym_db = _symbol_database.Default()
 
 
 
-DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16proto/atom_agent.proto\x12\x0e\x63om.atom.proto\"\x86\x01\n\rScreenElement\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x0c\n\x04role\x18\x02 \x01(\t\x12\x11\n\tclickable\x18\x03 \x01(\x08\x12\x11\n\tfocusable\x18\x04 \x01(\x08\x12\x10\n\x08\x65\x64itable\x18\x05 \x01(\x08\x12\x12\n\nscrollable\x18\x06 \x01(\x08\x12\r\n\x05index\x18\x07 \x01(\x05\"j\n\x0e\x43ommandRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x0f\n\x07\x63ommand\x18\x02 \x01(\t\x12\x36\n\x0fscreen_elements\x18\x03 \x03(\x0b\x32\x1d.com.atom.proto.ScreenElement\"\xbd\x01\n\x0f\x43ommandResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x13\n\x0bout_message\x18\x02 \x01(\t\x12\x13\n\x0b\x61\x63tion_type\x18\x03 \x01(\t\x12\x17\n\x0fparameters_json\x18\x04 \x01(\t\x12\x12\n\nconfidence\x18\x05 \x01(\x02\x12\x1d\n\x15requires_confirmation\x18\x06 \x01(\x08\x12\x15\n\rtask_complete\x18\x07 \x01(\x08\x12\x0c\n\x04step\x18\x08 \x01(\x05\"C\n\x0eMessageRequest\x12\x0f\n\x07user_id\x18\x01 \x01(\t\x12\x0f\n\x07\x63hat_id\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\"I\n\x0fMessageResponse\x12\x14\n\x0cscript_token\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x10\n\x08\x66inished\x18\x03 \x01(\x08\"p\n\x11TranscribeRequest\x12\x13\n\x0b\x61udio_bytes\x18\x01 \x01(\x0c\x12\x11\n\tmime_type\x18\x02 \x01(\t\x12\x10\n\x08language\x18\x03 \x01(\t\x12\x0e\n\x06\x66ormat\x18\x04 \x01(\t\x12\x11\n\tbeam_size\x18\x05 \x01(\x05\"t\n\x12TranscribeResponse\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x10\n\x08language\x18\x02 \x01(\t\x12\x18\n\x10\x64uration_seconds\x18\x03 \x01(\x02\x12\x12\n\nconfidence\x18\x04 \x01(\x02\x12\x10\n\x08provider\x18\x05 \x01(\t\"a\n\x11SynthesizeRequest\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\r\n\x05voice\x18\x02 \x01(\t\x12\x10\n\x08language\x18\x03 \x01(\t\x12\x0e\n\x06\x66ormat\x18\x04 \x01(\t\x12\r\n\x05speed\x18\x05 \x01(\x02\"L\n\x12SynthesizeResponse\x12\x13\n\x0b\x61udio_bytes\x18\x01 \x01(\x0c\x12\x11\n\tmime_type\x18\x02 \x01(\t\x12\x0e\n\x06\x66ormat\x18\x03 \x01(\t2\xe2\x02\n\x10\x41tomAgentService\x12Q\n\x0e\x45xecuteCommand\x12\x1e.com.atom.proto.CommandRequest\x1a\x1f.com.atom.proto.CommandResponse\x12O\n\nStreamChat\x12\x1e.com.atom.proto.MessageRequest\x1a\x1f.com.atom.proto.MessageResponse0\x01\x12S\n\nTranscribe\x12!.com.atom.proto.TranscribeRequest\x1a\".com.atom.proto.TranscribeResponse\x12U\n\nSynthesize\x12!.com.atom.proto.SynthesizeRequest\x1a\".com.atom.proto.SynthesizeResponse0\x01\x42\x31\n$com.atom.infrastructure.adapter.grpcB\x07\x41iProtoP\x01\x62\x06proto3')
+DESCRIPTOR = _descriptor_pool.Default().AddSerializedFile(b'\n\x16proto/atom_agent.proto\x12\x0e\x63om.atom.proto\"H\n\x0fRegisterRequest\x12\r\n\x05\x65mail\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\x12\x14\n\x0c\x64isplay_name\x18\x03 \x01(\t\"/\n\x0cLoginRequest\x12\r\n\x05\x65mail\x18\x01 \x01(\t\x12\x10\n\x08password\x18\x02 \x01(\t\"%\n\x11GoogleAuthRequest\x12\x10\n\x08id_token\x18\x01 \x01(\t\"\'\n\x0eRefreshRequest\x12\x15\n\rrefresh_token\x18\x01 \x01(\t\"`\n\x0c\x41uthResponse\x12\x14\n\x0c\x61\x63\x63\x65ss_token\x18\x01 \x01(\t\x12\x15\n\rrefresh_token\x18\x02 \x01(\t\x12\x12\n\nexpires_in\x18\x03 \x01(\x03\x12\x0f\n\x07user_id\x18\x04 \x01(\t\"\x86\x01\n\rScreenElement\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x0c\n\x04role\x18\x02 \x01(\t\x12\x11\n\tclickable\x18\x03 \x01(\x08\x12\x11\n\tfocusable\x18\x04 \x01(\x08\x12\x10\n\x08\x65\x64itable\x18\x05 \x01(\x08\x12\x12\n\nscrollable\x18\x06 \x01(\x08\x12\r\n\x05index\x18\x07 \x01(\x05\"n\n\x0e\x43ommandRequest\x12\x13\n\x07user_id\x18\x01 \x01(\tB\x02\x18\x01\x12\x0f\n\x07\x63ommand\x18\x02 \x01(\t\x12\x36\n\x0fscreen_elements\x18\x03 \x03(\x0b\x32\x1d.com.atom.proto.ScreenElement\"\xbd\x01\n\x0f\x43ommandResponse\x12\x0f\n\x07success\x18\x01 \x01(\x08\x12\x13\n\x0bout_message\x18\x02 \x01(\t\x12\x13\n\x0b\x61\x63tion_type\x18\x03 \x01(\t\x12\x17\n\x0fparameters_json\x18\x04 \x01(\t\x12\x12\n\nconfidence\x18\x05 \x01(\x02\x12\x1d\n\x15requires_confirmation\x18\x06 \x01(\x08\x12\x15\n\rtask_complete\x18\x07 \x01(\x08\x12\x0c\n\x04step\x18\x08 \x01(\x05\"G\n\x0eMessageRequest\x12\x13\n\x07user_id\x18\x01 \x01(\tB\x02\x18\x01\x12\x0f\n\x07\x63hat_id\x18\x02 \x01(\t\x12\x0f\n\x07message\x18\x03 \x01(\t\"I\n\x0fMessageResponse\x12\x14\n\x0cscript_token\x18\x01 \x01(\t\x12\x0e\n\x06status\x18\x02 \x01(\t\x12\x10\n\x08\x66inished\x18\x03 \x01(\x08\"p\n\x11TranscribeRequest\x12\x13\n\x0b\x61udio_bytes\x18\x01 \x01(\x0c\x12\x11\n\tmime_type\x18\x02 \x01(\t\x12\x10\n\x08language\x18\x03 \x01(\t\x12\x0e\n\x06\x66ormat\x18\x04 \x01(\t\x12\x11\n\tbeam_size\x18\x05 \x01(\x05\"t\n\x12TranscribeResponse\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\x10\n\x08language\x18\x02 \x01(\t\x12\x18\n\x10\x64uration_seconds\x18\x03 \x01(\x02\x12\x12\n\nconfidence\x18\x04 \x01(\x02\x12\x10\n\x08provider\x18\x05 \x01(\t\"a\n\x11SynthesizeRequest\x12\x0c\n\x04text\x18\x01 \x01(\t\x12\r\n\x05voice\x18\x02 \x01(\t\x12\x10\n\x08language\x18\x03 \x01(\t\x12\x0e\n\x06\x66ormat\x18\x04 \x01(\t\x12\r\n\x05speed\x18\x05 \x01(\x02\"L\n\x12SynthesizeResponse\x12\x13\n\x0b\x61udio_bytes\x18\x01 \x01(\x0c\x12\x11\n\tmime_type\x18\x02 \x01(\t\x12\x0e\n\x06\x66ormat\x18\x03 \x01(\t2\x9b\x05\n\x10\x41tomAgentService\x12I\n\x08Register\x12\x1f.com.atom.proto.RegisterRequest\x1a\x1c.com.atom.proto.AuthResponse\x12\x43\n\x05Login\x12\x1c.com.atom.proto.LoginRequest\x1a\x1c.com.atom.proto.AuthResponse\x12Y\n\x16\x41uthenticateWithGoogle\x12!.com.atom.proto.GoogleAuthRequest\x1a\x1c.com.atom.proto.AuthResponse\x12L\n\x0cRefreshToken\x12\x1e.com.atom.proto.RefreshRequest\x1a\x1c.com.atom.proto.AuthResponse\x12Q\n\x0e\x45xecuteCommand\x12\x1e.com.atom.proto.CommandRequest\x1a\x1f.com.atom.proto.CommandResponse\x12O\n\nStreamChat\x12\x1e.com.atom.proto.MessageRequest\x1a\x1f.com.atom.proto.MessageResponse0\x01\x12S\n\nTranscribe\x12!.com.atom.proto.TranscribeRequest\x1a\".com.atom.proto.TranscribeResponse\x12U\n\nSynthesize\x12!.com.atom.proto.SynthesizeRequest\x1a\".com.atom.proto.SynthesizeResponse0\x01\x42\x31\n$com.atom.infrastructure.adapter.grpcB\x07\x41iProtoP\x01\x62\x06proto3')
 
 _globals = globals()
 _builder.BuildMessageAndEnumDescriptors(DESCRIPTOR, _globals)
@@ -32,24 +32,38 @@ _builder.BuildTopDescriptorsAndMessages(DESCRIPTOR, 'proto.atom_agent_pb2', _glo
 if not _descriptor._USE_C_DESCRIPTORS:
   _globals['DESCRIPTOR']._loaded_options = None
   _globals['DESCRIPTOR']._serialized_options = b'\n$com.atom.infrastructure.adapter.grpcB\007AiProtoP\001'
-  _globals['_SCREENELEMENT']._serialized_start=43
-  _globals['_SCREENELEMENT']._serialized_end=177
-  _globals['_COMMANDREQUEST']._serialized_start=179
-  _globals['_COMMANDREQUEST']._serialized_end=285
-  _globals['_COMMANDRESPONSE']._serialized_start=288
-  _globals['_COMMANDRESPONSE']._serialized_end=477
-  _globals['_MESSAGEREQUEST']._serialized_start=479
-  _globals['_MESSAGEREQUEST']._serialized_end=546
-  _globals['_MESSAGERESPONSE']._serialized_start=548
-  _globals['_MESSAGERESPONSE']._serialized_end=621
-  _globals['_TRANSCRIBEREQUEST']._serialized_start=623
-  _globals['_TRANSCRIBEREQUEST']._serialized_end=735
-  _globals['_TRANSCRIBERESPONSE']._serialized_start=737
-  _globals['_TRANSCRIBERESPONSE']._serialized_end=853
-  _globals['_SYNTHESIZEREQUEST']._serialized_start=855
-  _globals['_SYNTHESIZEREQUEST']._serialized_end=952
-  _globals['_SYNTHESIZERESPONSE']._serialized_start=954
-  _globals['_SYNTHESIZERESPONSE']._serialized_end=1030
-  _globals['_ATOMAGENTSERVICE']._serialized_start=1033
-  _globals['_ATOMAGENTSERVICE']._serialized_end=1387
+  _globals['_COMMANDREQUEST'].fields_by_name['user_id']._loaded_options = None
+  _globals['_COMMANDREQUEST'].fields_by_name['user_id']._serialized_options = b'\030\001'
+  _globals['_MESSAGEREQUEST'].fields_by_name['user_id']._loaded_options = None
+  _globals['_MESSAGEREQUEST'].fields_by_name['user_id']._serialized_options = b'\030\001'
+  _globals['_REGISTERREQUEST']._serialized_start=42
+  _globals['_REGISTERREQUEST']._serialized_end=114
+  _globals['_LOGINREQUEST']._serialized_start=116
+  _globals['_LOGINREQUEST']._serialized_end=163
+  _globals['_GOOGLEAUTHREQUEST']._serialized_start=165
+  _globals['_GOOGLEAUTHREQUEST']._serialized_end=202
+  _globals['_REFRESHREQUEST']._serialized_start=204
+  _globals['_REFRESHREQUEST']._serialized_end=243
+  _globals['_AUTHRESPONSE']._serialized_start=245
+  _globals['_AUTHRESPONSE']._serialized_end=341
+  _globals['_SCREENELEMENT']._serialized_start=344
+  _globals['_SCREENELEMENT']._serialized_end=478
+  _globals['_COMMANDREQUEST']._serialized_start=480
+  _globals['_COMMANDREQUEST']._serialized_end=590
+  _globals['_COMMANDRESPONSE']._serialized_start=593
+  _globals['_COMMANDRESPONSE']._serialized_end=782
+  _globals['_MESSAGEREQUEST']._serialized_start=784
+  _globals['_MESSAGEREQUEST']._serialized_end=855
+  _globals['_MESSAGERESPONSE']._serialized_start=857
+  _globals['_MESSAGERESPONSE']._serialized_end=930
+  _globals['_TRANSCRIBEREQUEST']._serialized_start=932
+  _globals['_TRANSCRIBEREQUEST']._serialized_end=1044
+  _globals['_TRANSCRIBERESPONSE']._serialized_start=1046
+  _globals['_TRANSCRIBERESPONSE']._serialized_end=1162
+  _globals['_SYNTHESIZEREQUEST']._serialized_start=1164
+  _globals['_SYNTHESIZEREQUEST']._serialized_end=1261
+  _globals['_SYNTHESIZERESPONSE']._serialized_start=1263
+  _globals['_SYNTHESIZERESPONSE']._serialized_end=1339
+  _globals['_ATOMAGENTSERVICE']._serialized_start=1342
+  _globals['_ATOMAGENTSERVICE']._serialized_end=2009
 # @@protoc_insertion_point(module_scope)

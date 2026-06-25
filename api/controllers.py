@@ -54,7 +54,22 @@ def create_chat_router(chat_use_case_provider: UseCaseProviderChat) -> APIRouter
             )
             output = await use_case.execute(input_dto)
             return ChatResponse(text=output.text, session_id=output.session_id)
-        except Exception as exc:
+        except ValidationError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=_error_detail("INVALID_REQUEST", str(exc), x_request_id),
+            ) from exc
+        except DomainValidationError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=_error_detail("VALIDATION_ERROR", str(exc), x_request_id),
+            ) from exc
+        except ProviderError as exc:
+            raise HTTPException(
+                status_code=503,
+                detail=_error_detail("CHAT_UNAVAILABLE", str(exc), x_request_id),
+            ) from exc
+        except DomainError as exc:
             raise HTTPException(
                 status_code=500,
                 detail=_error_detail("CHAT_ERROR", str(exc), x_request_id),

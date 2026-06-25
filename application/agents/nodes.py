@@ -36,7 +36,10 @@ class GraphNodes:
         if not self.memory_enabled:
             return {"context": ""}
         try:
-            results = await self.vector_store.search(state["input"])
+            # Isolate retrieval to this session/user — never read another user's memory.
+            results = await self.vector_store.search(
+                state["input"], session_id=state.get("session_id")
+            )
             context = "\n".join([r.content for r in results])
         except Exception as exc:
             logger.warning(

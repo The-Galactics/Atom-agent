@@ -89,14 +89,20 @@ class QdrantAdapter(VectorStorePort):
                 size=size, distance=rest.Distance.COSINE
             ),
         )
-        # Index created_at so TTL pruning (delete-by-range) stays efficient.
+        # Index created_at so TTL pruning (delete-by-range) stays efficient, and
+        # session_id so the per-user isolation filter stays fast.
         try:
             self.client.create_payload_index(
                 collection_name=self.collection_name,
                 field_name="created_at",
                 field_schema=rest.PayloadSchemaType.INTEGER,
             )
-        except Exception as exc:  # non-fatal: pruning still works without it
+            self._client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="session_id",
+                field_schema=rest.PayloadSchemaType.KEYWORD,
+            )
+        except Exception as exc:  # non-fatal: filtering/pruning still works without it
             logger.warning("qdrant_index_failed error=%s", exc)
 
     async def store(self, content: str, metadata: dict) -> None:
@@ -105,8 +111,8 @@ class QdrantAdapter(VectorStorePort):
         # Bootstrap the collection to the embedding's real dimension on first use.
         await self._ensure_collection(len(vector))
 
-        # #2 Dedup: skip storing a near-duplicate of an existing memory.
-        if self.dedup_threshold < 1.0 and self._is_duplicate(vector):
+        # #2 Dedup: skip storing a near-duplicate within the SAME session.
+        if self.dedup_threshold < 1.0 and self._is_duplicate(vector, metadata.get("session_id")):
             logger.info("memory_dedup_skipped session_id=%s", metadata.get("session_id"))
             return
 
@@ -128,14 +134,16 @@ class QdrantAdapter(VectorStorePort):
         if self.ttl_seconds > 0 and self._store_count % self.prune_every == 0:
             self._prune_expired()
 
-    def _is_duplicate(self, vector: list[float]) -> bool:
-        # A near-duplicate exists if the closest point clears the dedup threshold.
+    def _is_duplicate(self, vector: list[float], session_id: str | None = None) -> bool:
+        # A near-duplicate exists if the closest point in the SAME session clears
+        # the dedup threshold.
         try:
             hits = self.client.query_points(
                 collection_name=self.collection_name,
                 query=vector,
                 limit=1,
                 score_threshold=self.dedup_threshold,
+                query_filter=self._session_filter(session_id),
             ).points
             return bool(hits)
         except Exception:
@@ -159,10 +167,21 @@ class QdrantAdapter(VectorStorePort):
         except Exception as exc:
             logger.warning("memory_prune_failed error=%s", exc)
 
+    def _session_filter(self, session_id: str | None):
+        # Restrict a query to one session/user, or None for an unfiltered query.
+        if not session_id:
+            return None
+        return rest.Filter(
+            must=[rest.FieldCondition(
+                key="session_id", match=rest.MatchValue(value=session_id))]
+        )
+
     async def search(
-        self, query: str, limit: int = 5, score_threshold: float = 0.5
+        self, query: str, limit: int = 5, score_threshold: float = 0.5,
+        session_id: str | None = None,
     ) -> list[MemoryEntry]:
-        # Embed query and return mapped memory entries.
+        # Embed query and return mapped memory entries, isolated by session_id so
+        # a user never retrieves another user's memory.
         vector = await self.embedding_port.embed_text(query)
         # Bootstrap the collection to the embedding's real dimension on first use.
         await self._ensure_collection(len(vector))
@@ -171,6 +190,7 @@ class QdrantAdapter(VectorStorePort):
             query=vector,
             limit=limit,
             score_threshold=score_threshold,
+            query_filter=self._session_filter(session_id),
         ).points
 
         return [

@@ -93,6 +93,37 @@ class Settings(BaseSettings):
     memory_ttl_days: int = Field(30, env="MEMORY_TTL_DAYS")
     memory_prune_every: int = Field(20, env="MEMORY_PRUNE_EVERY")
 
+    # --- Authentication (HU-27 / ATOM-54) ---
+    # MongoDB user store.
+    mongo_url: str = Field("mongodb://localhost:27017", env="MONGO_URL")
+    mongo_db: str = Field("atom", env="MONGO_DB")
+    # Session tokens. Default is RS256 (asymmetric): provide a PEM keypair via
+    # JWT_PRIVATE_KEY_PATH / JWT_PUBLIC_KEY_PATH (run scripts/gen_jwt_keys.py for
+    # dev). Inline PEMs in JWT_SIGNING_KEY/JWT_VERIFYING_KEY also work. For HS256
+    # set JWT_ALGORITHM=HS256 and a shared JWT_SECRET instead.
+    jwt_secret: str | None = Field(None, env="JWT_SECRET")
+    jwt_algorithm: str = Field("RS256", env="JWT_ALGORITHM")
+    jwt_signing_key: str | None = Field(None, env="JWT_SIGNING_KEY")
+    jwt_verifying_key: str | None = Field(None, env="JWT_VERIFYING_KEY")
+    # RS256 PEM key files (preferred over inline PEMs above).
+    jwt_private_key_path: str | None = Field(None, env="JWT_PRIVATE_KEY_PATH")
+    jwt_public_key_path: str | None = Field(None, env="JWT_PUBLIC_KEY_PATH")
+    jwt_issuer: str = Field("atom-agent", env="JWT_ISSUER")
+    jwt_access_ttl_seconds: int = Field(900, env="JWT_ACCESS_TTL_SECONDS")
+    jwt_refresh_ttl_seconds: int = Field(2_592_000, env="JWT_REFRESH_TTL_SECONDS")
+    # Refresh-token store: Redis when REDIS_URL is set, else in-memory (single instance).
+    redis_url: str | None = Field(None, env="REDIS_URL")
+    # Google Sign-In: Web client ID used as the ID-token audience. Distinct from
+    # GOOGLE_API_KEY (which is for Gemini).
+    google_oauth_client_id: str | None = Field(None, env="GOOGLE_OAUTH_CLIENT_ID")
+    # Deployment environment. In "production"/"prod" the gRPC server refuses to
+    # start without TLS (see infrastructure/grpc/server.py).
+    app_env: str = Field("development", env="APP_ENV")
+    # gRPC TLS. When both are set the server uses add_secure_port; otherwise it
+    # falls back to an INSECURE port (development only).
+    tls_cert_path: str | None = Field(None, env="TLS_CERT_PATH")
+    tls_key_path: str | None = Field(None, env="TLS_KEY_PATH")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"

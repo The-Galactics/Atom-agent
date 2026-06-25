@@ -6,6 +6,48 @@ from typing import ClassVar as _ClassVar, Optional as _Optional, Union as _Union
 
 DESCRIPTOR: _descriptor.FileDescriptor
 
+class RegisterRequest(_message.Message):
+    __slots__ = ("email", "password", "display_name")
+    EMAIL_FIELD_NUMBER: _ClassVar[int]
+    PASSWORD_FIELD_NUMBER: _ClassVar[int]
+    DISPLAY_NAME_FIELD_NUMBER: _ClassVar[int]
+    email: str
+    password: str
+    display_name: str
+    def __init__(self, email: _Optional[str] = ..., password: _Optional[str] = ..., display_name: _Optional[str] = ...) -> None: ...
+
+class LoginRequest(_message.Message):
+    __slots__ = ("email", "password")
+    EMAIL_FIELD_NUMBER: _ClassVar[int]
+    PASSWORD_FIELD_NUMBER: _ClassVar[int]
+    email: str
+    password: str
+    def __init__(self, email: _Optional[str] = ..., password: _Optional[str] = ...) -> None: ...
+
+class GoogleAuthRequest(_message.Message):
+    __slots__ = ("id_token",)
+    ID_TOKEN_FIELD_NUMBER: _ClassVar[int]
+    id_token: str
+    def __init__(self, id_token: _Optional[str] = ...) -> None: ...
+
+class RefreshRequest(_message.Message):
+    __slots__ = ("refresh_token",)
+    REFRESH_TOKEN_FIELD_NUMBER: _ClassVar[int]
+    refresh_token: str
+    def __init__(self, refresh_token: _Optional[str] = ...) -> None: ...
+
+class AuthResponse(_message.Message):
+    __slots__ = ("access_token", "refresh_token", "expires_in", "user_id")
+    ACCESS_TOKEN_FIELD_NUMBER: _ClassVar[int]
+    REFRESH_TOKEN_FIELD_NUMBER: _ClassVar[int]
+    EXPIRES_IN_FIELD_NUMBER: _ClassVar[int]
+    USER_ID_FIELD_NUMBER: _ClassVar[int]
+    access_token: str
+    refresh_token: str
+    expires_in: int
+    user_id: str
+    def __init__(self, access_token: _Optional[str] = ..., refresh_token: _Optional[str] = ..., expires_in: _Optional[int] = ..., user_id: _Optional[str] = ...) -> None: ...
+
 class ScreenElement(_message.Message):
     __slots__ = ("text", "role", "clickable", "focusable", "editable", "scrollable", "index")
     TEXT_FIELD_NUMBER: _ClassVar[int]
