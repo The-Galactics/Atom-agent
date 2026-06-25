@@ -96,6 +96,6 @@ class GraphNodes:
     async def _persist(self, content: str, session_id: str) -> None:
         """Embeds + upserts the interaction off the request path. Best-effort."""
         try:
-            await self.vector_store.store(content, {"session_id": session_id})
+            await self.vector_store.store(content, {"user_id": session_id})
         except Exception as exc:
             logger.warning("memory_store_failed session_id=%s error=%s", session_id, exc)

@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from ports.user_repository_port import UserRepositoryPort
 
 from adapters.speech.faster_whisper_adapter import FasterWhisperAdapter
 from adapters.speech.kokoro_adapter import KokoroAdapter
@@ -67,7 +70,22 @@ class AppContainer:
     authenticate_use_case: Optional[AuthenticateUserUseCase] = None
     authenticate_with_google_use_case: Optional[AuthenticateWithGoogleUseCase] = None
     refresh_session_use_case: Optional[RefreshSessionUseCase] = None
+    user_repository: Optional["UserRepositoryPort"] = None
     auth_status: str = "ready"
+
+    async def ensure_auth_indexes(self) -> None:
+        """Create the unique Mongo indexes (email, google_sub). No-op when auth is disabled.
+
+        Best-effort: if MongoDB is unreachable at startup the error is logged as a
+        warning and swallowed so the rest of the service (voice/chat) still starts.
+        Uniqueness at the use-case layer acts as a safety net until the indexes are
+        eventually created on the next successful startup.
+        """
+        if self.user_repository is not None:
+            try:
+                await self.user_repository.ensure_indexes()
+            except Exception as exc:
+                logger.warning("auth_index_init_failed error=%s", exc)
 
     def shutdown(self) -> None:
         if self.stt_adapter is not None:
@@ -304,7 +322,7 @@ def _load_pem(path: str | None) -> str | None:
 def _build_auth_stack(settings: Settings):
     """Construct the authentication stack defensively.
 
-    Returns ``(token_service, register, authenticate, google, refresh, status)``.
+    Returns ``(token_service, register, authenticate, google, refresh, user_repository, status)``.
     All are ``None`` when no JWT secret/signing key is configured (auth disabled),
     so the rest of the service still starts. Mongo/Redis clients connect lazily, so
     this never blocks startup on an unreachable database. Google login is only
@@ -315,12 +333,12 @@ def _build_auth_stack(settings: Settings):
         signing_key = settings.jwt_secret or settings.jwt_signing_key
         verifying_key = None  # HS256: the verifying key IS the signing secret.
         if not signing_key:
-            return None, None, None, None, None, "auth disabled: set JWT_SECRET (HS256)"
+            return None, None, None, None, None, None, "auth disabled: set JWT_SECRET (HS256)"
     else:
         signing_key = _load_pem(settings.jwt_private_key_path) or settings.jwt_signing_key
         verifying_key = _load_pem(settings.jwt_public_key_path) or settings.jwt_verifying_key
         if not (signing_key and verifying_key):
-            return None, None, None, None, None, (
+            return None, None, None, None, None, None, (
                 f"auth disabled: {alg} needs a PEM keypair "
                 "(set JWT_PRIVATE_KEY_PATH/JWT_PUBLIC_KEY_PATH; run scripts/gen_jwt_keys.py)"
             )
@@ -361,10 +379,10 @@ def _build_auth_stack(settings: Settings):
             verifier = GoogleIdTokenVerifier(settings.google_oauth_client_id)
             google = AuthenticateWithGoogleUseCase(users, verifier, tokens)
 
-        return tokens, register, authenticate, google, refresh, "ready"
+        return tokens, register, authenticate, google, refresh, users, "ready"
     except Exception as exc:  # pragma: no cover - defensive
         logger.warning("auth_init_failed error=%s", exc)
-        return None, None, None, None, None, f"auth unavailable: {exc}"
+        return None, None, None, None, None, None, f"auth unavailable: {exc}"
 
 
 def build_container(settings: Settings) -> AppContainer:
@@ -414,6 +432,7 @@ def build_container(settings: Settings) -> AppContainer:
         authenticate_use_case,
         authenticate_with_google_use_case,
         refresh_session_use_case,
+        user_repository,
         auth_status,
     ) = _build_auth_stack(settings)
 
@@ -445,5 +464,6 @@ def build_container(settings: Settings) -> AppContainer:
         authenticate_use_case=authenticate_use_case,
         authenticate_with_google_use_case=authenticate_with_google_use_case,
         refresh_session_use_case=refresh_session_use_case,
+        user_repository=user_repository,
         auth_status=auth_status,
     )

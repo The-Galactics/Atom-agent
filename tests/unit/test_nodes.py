@@ -124,4 +124,4 @@ def test_store_memory_persists_memorable_in_background():
     content, metadata = stored[0]
     assert "me llamo Andrés" in content
     assert "Encantado" in content
-    assert metadata == {"session_id": "s"}
+    assert metadata == {"user_id": "s"}
