@@ -31,6 +31,7 @@ from ports.llm_port import LLMPort
 from ports.vector_store_port import VectorStorePort
 from ports.embedding_port import EmbeddingPort
 from ports.history_port import HistoryPort
+from ports.intent_port import IntentRecognizerPort
 
 logger = logging.getLogger("voice_module")
 
@@ -115,6 +116,13 @@ class AppContainer:
                     "provider": "qdrant",
                     "url": self.settings.qdrant_url,
                 },
+                "skills": {
+                    # Action cache for repeated single-shot commands (separate
+                    # Qdrant collection). Lazy, so reported by config flag.
+                    "status": "enabled" if self.settings.skills_enabled else "disabled",
+                    "provider": "qdrant",
+                    "collection": self.settings.skills_collection,
+                },
             },
         }
 
@@ -171,7 +179,7 @@ def _build_voice_adapters(settings: Settings):
     return kokoro_client, stt_adapter, tts_adapter, status
 
 
-def _build_intent_use_case(settings: Settings):
+def _build_intent_use_case(settings: Settings, embedding_adapter: Optional[EmbeddingPort]):
     """Construct the order/intent use case defensively.
 
     Returns (use_case, status). ``use_case`` is ``None`` when the function-
@@ -179,6 +187,10 @@ def _build_intent_use_case(settings: Settings):
     absent API key, etc.), so the order endpoint degrades gracefully.
     Conversational (non-action) utterances resolve to a ``NONE`` action here;
     the client re-routes those to the StreamChat RPC for the grounded reply.
+
+    When ``skills_enabled`` and an embedding adapter is available, the recognizer
+    is wrapped in :class:`CachingIntentRecognizer` so repeated single-shot
+    commands are served from a Qdrant cache without calling the LLM.
     """
     if not settings.google_api_key:
         return None, "intent provider unavailable: GOOGLE_API_KEY not set"
@@ -187,11 +199,35 @@ def _build_intent_use_case(settings: Settings):
             GeminiFunctionCallingAdapter,
         )
 
-        recognizer = GeminiFunctionCallingAdapter(
+        recognizer: IntentRecognizerPort = GeminiFunctionCallingAdapter(
             api_key=settings.google_api_key,
             model=settings.llm_model,
             timezone=settings.assistant_timezone,
         )
+
+        # Action cache: a separate Qdrant collection keyed by command text.
+        if settings.skills_enabled and embedding_adapter is not None:
+            from adapters.intent.caching_intent_recognizer import (
+                CachingIntentRecognizer,
+            )
+
+            skills_store = QdrantAdapter(
+                url=settings.qdrant_url,
+                api_key=settings.qdrant_api_key,
+                collection_name=settings.skills_collection,
+                embedding_port=embedding_adapter,
+                # dedup at the hit threshold so near-identical commands collapse.
+                dedup_threshold=settings.skills_hit_threshold,
+                ttl_days=settings.skills_ttl_days,
+                prune_every=settings.memory_prune_every,
+                vector_size=settings.qdrant_vector_size,
+            )
+            recognizer = CachingIntentRecognizer(
+                inner=recognizer,
+                vector_store=skills_store,
+                hit_threshold=settings.skills_hit_threshold,
+            )
+
         session_store = SessionStore(
             max_steps_per_session=settings.intent_max_steps,
             max_sessions=settings.intent_max_sessions,
@@ -347,7 +383,7 @@ def build_container(settings: Settings) -> AppContainer:
     # Built defensively: degrades to UNAVAILABLE if the provider is misconfigured.
     # Non-action utterances resolve to a NONE action; the client re-routes those
     # to StreamChat (which uses chat_use_case) for the grounded reply.
-    execute_command_use_case, intent_status = _build_intent_use_case(settings)
+    execute_command_use_case, intent_status = _build_intent_use_case(settings, embedding_adapter)
 
     (
         token_service,

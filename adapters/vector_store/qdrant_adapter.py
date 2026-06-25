@@ -30,13 +30,16 @@ class QdrantAdapter(VectorStorePort):
         dedup_threshold: float = 0.95,
         ttl_days: int = 30,
         prune_every: int = 20,
-        vector_size: int = 3072,
+        vector_size: int = 0,
     ):
         self.url = url
         self.api_key = api_key
         self.collection_name = collection_name
         self.embedding_port = embedding_port
-        # Embedding dimensionality; must match the configured embedding model.
+        # Embedding dimensionality. 0 = auto-detect from the first real embedding
+        # (so the collection always matches the model and never mismatches —
+        # the root cause of the previous "embeddings failing"). A positive value
+        # pins the size explicitly.
         self.vector_size = vector_size
         # Memory-hygiene knobs (see Settings). dedup_threshold >= 1.0 disables
         # dedup; ttl_days <= 0 disables TTL pruning.
@@ -45,41 +48,51 @@ class QdrantAdapter(VectorStorePort):
         self.prune_every = max(1, prune_every)
         self._store_count = 0
         self._client: QdrantClient | None = None
+        self._collection_ready = False
 
     @property
     def client(self) -> QdrantClient:
+        # Lazily create the client only. Collection bootstrap is deferred to the
+        # async ``_ensure_collection`` so the true vector dimension can be taken
+        # from a real embedding instead of a (possibly wrong) configured number.
         if self._client is None:
             self._client = QdrantClient(url=self.url, api_key=self.api_key)
-            self._ensure_collection()
         return self._client
 
-    def _ensure_collection(self):
-        # Verify the collection exists and has the expected vector dimension.
-        # Use the private ``_client`` here (not the ``client`` property) because
-        # this runs from inside the property after ``_client`` is assigned;
-        # referencing the property would recurse back into ``_ensure_collection``.
+    async def _ensure_collection(self, dim: int) -> None:
+        # Idempotent: create the collection on first use, sized to the model's
+        # actual embedding dimension (``vector_size`` when pinned, else ``dim``).
+        if self._collection_ready:
+            return
+        target = self.vector_size if self.vector_size else dim
+        client = self.client
         try:
-            collection_info = self._client.get_collection(self.collection_name)
+            collection_info = client.get_collection(self.collection_name)
             current_size = collection_info.config.params.vectors.size
-            if current_size != self.vector_size:
-                print(f"Dimension mismatch (expected {self.vector_size}, got {current_size}). Recreating collection...")
-                self._client.delete_collection(self.collection_name)
-                self._create_collection()
+            if current_size != target:
+                logger.warning(
+                    "qdrant_dim_mismatch collection=%s expected=%s got=%s recreating",
+                    self.collection_name, target, current_size,
+                )
+                client.delete_collection(self.collection_name)
+                self._create_collection(target)
         except Exception:
-            # Collection does not exist
-            self._create_collection()
+            # Collection does not exist yet.
+            self._create_collection(target)
+        self.vector_size = target
+        self._collection_ready = True
 
-    def _create_collection(self):
-        self._client.create_collection(
+    def _create_collection(self, size: int) -> None:
+        self.client.create_collection(
             collection_name=self.collection_name,
             vectors_config=rest.VectorParams(
-                size=self.vector_size, distance=rest.Distance.COSINE
+                size=size, distance=rest.Distance.COSINE
             ),
         )
         # Index created_at so TTL pruning (delete-by-range) stays efficient, and
         # session_id so the per-user isolation filter stays fast.
         try:
-            self._client.create_payload_index(
+            self.client.create_payload_index(
                 collection_name=self.collection_name,
                 field_name="created_at",
                 field_schema=rest.PayloadSchemaType.INTEGER,
@@ -95,6 +108,8 @@ class QdrantAdapter(VectorStorePort):
     async def store(self, content: str, metadata: dict) -> None:
         # Embed content once; reuse the vector for dedup and upsert.
         vector = await self.embedding_port.embed_text(content)
+        # Bootstrap the collection to the embedding's real dimension on first use.
+        await self._ensure_collection(len(vector))
 
         # #2 Dedup: skip storing a near-duplicate within the SAME session.
         if self.dedup_threshold < 1.0 and self._is_duplicate(vector, metadata.get("session_id")):
@@ -168,6 +183,8 @@ class QdrantAdapter(VectorStorePort):
         # Embed query and return mapped memory entries, isolated by session_id so
         # a user never retrieves another user's memory.
         vector = await self.embedding_port.embed_text(query)
+        # Bootstrap the collection to the embedding's real dimension on first use.
+        await self._ensure_collection(len(vector))
         results = self.client.query_points(
             collection_name=self.collection_name,
             query=vector,
