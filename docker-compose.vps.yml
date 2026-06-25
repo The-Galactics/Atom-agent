@@ -1,0 +1,34 @@
+# Despliegue del VPS — gestionado por `git pull` + `docker compose`.
+#
+# Diseño:
+#  - Los puertos de la API se publican SOLO en 127.0.0.1: no quedan expuestos a
+#    internet. nginx (en el host) termina TLS en :443 y hace proxy a estos
+#    puertos locales (gRPC -> 127.0.0.1:50051, HTTP -> 127.0.0.1:8050).
+#  - Qdrant no publica puertos: solo es accesible por la API en la red interna.
+#  - Voz (Kokoro) desactivada vía .env para no agotar la RAM del VPS.
+#
+# Deploy:  git pull && docker compose -f docker-compose.vps.yml up -d --build
+services:
+  qdrant:
+    image: qdrant/qdrant:latest
+    container_name: atom-qdrant
+    restart: unless-stopped
+    volumes:
+      - ./qdrant_storage:/qdrant/storage
+
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: atom-agent
+    restart: unless-stopped
+    env_file:
+      - .env
+    environment:
+      # La API alcanza a Qdrant por el nombre de servicio en la red de compose.
+      QDRANT_URL: http://qdrant:6333
+    ports:
+      - "127.0.0.1:8050:8000"     # HTTP  -> nginx proxy_pass
+      - "127.0.0.1:50051:50051"   # gRPC  -> nginx grpc_pass
+    depends_on:
+      - qdrant
