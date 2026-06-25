@@ -96,6 +96,10 @@ class Settings(BaseSettings):
     # Google Sign-In: Web client ID used as the ID-token audience. Distinct from
     # GOOGLE_API_KEY (which is for Gemini).
     google_oauth_client_id: str | None = Field(None, env="GOOGLE_OAUTH_CLIENT_ID")
+    # gRPC TLS. When both are set the server uses add_secure_port; otherwise it
+    # falls back to an INSECURE port (development only).
+    tls_cert_path: str | None = Field(None, env="TLS_CERT_PATH")
+    tls_key_path: str | None = Field(None, env="TLS_KEY_PATH")
 
     class Config:
         env_file = ".env"
