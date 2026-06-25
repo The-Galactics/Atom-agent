@@ -8,6 +8,41 @@
 
 ---
 
+## 0. Actualización — caché de acciones + fix de embeddings
+
+> Rama: `feat/action-cache-and-embeddings` (base `develop`) · Fecha: 2026-06-25
+
+Cambios de esta iteración:
+- **Fix de embeddings (causa raíz):** el fallo era un **mismatch de dimensión**
+  (`models/embedding-001`=768 vs `qdrant_vector_size`=3072). Se consolida el modelo a
+  `models/gemini-embedding-2` en los 3 sitios divergentes y `QdrantAdapter` ahora
+  **auto-detecta la dimensión** del primer embedding (`qdrant_vector_size=0` ⇒ auto),
+  eliminando esa clase de bug.
+- **Caché de acciones (`CachingIntentRecognizer`):** decorador sobre `IntentRecognizerPort`.
+  Cachea en Qdrant (colección `skills`) solo comandos de un disparo e independientes de
+  pantalla (`open_app`/`set_alarm`/`set_timer`/`toggle_setting`) en el **primer paso ReAct**;
+  un comando repetido se resuelve **sin llamar al LLM**. Multi-paso, dependientes de pantalla
+  y sensibles → siempre al LLM. El orquestador ReAct no se tocó.
+- **Memoria conversacional vectorial desactivada** (`memory_enabled=False`) e historial
+  corto 50 → **20**.
+
+Tests de esta iteración:
+
+| Archivo | Tests | Cubre |
+| --- | --- | --- |
+| `test_caching_intent_recognizer.py` *(nuevo)* | 7 | hit en 1er paso sin LLM; miss delega+memoriza solo cacheables; no-cacheable/sensible no se memoriza; `history` salta la caché; hit obsoleto ignorado; fallo de store degrada |
+| `test_container.py` *(ampliado)* | +3 | readiness `vector_store=disabled`/`skills=enabled`; recognizer envuelto en caché según `skills_enabled`; firma `_build_intent_use_case(settings, embedding_adapter)` |
+
+Resultado: **`tests/unit` → 104 passed, 0 failed** (Docker `atom-agent-api:latest` + `pytest`,
+`PYTHONPATH=/app`). El orquestador ReAct y la suite previa siguen en verde.
+
+**Verificación viva PENDIENTE (bloqueada):** el `.env` con `GOOGLE_API_KEY` ya no está en el
+repo, así que falta (a) confirmar que el id `models/gemini-embedding-2` existe y su dimensión
+real, y (b) el E2E (comando repetido → `cache_hit` sin LLM; colección `skills` poblada). Se
+hará al restaurar `.env`.
+
+---
+
 ## 1. Cómo reproducir
 
 ```bash
