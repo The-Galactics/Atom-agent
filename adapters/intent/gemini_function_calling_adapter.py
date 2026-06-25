@@ -67,6 +67,25 @@ _SYSTEM_PROMPT = (
 # Cap rendered elements to bound prompt tokens.
 _MAX_SCREEN_LINES = 80
 
+# Text markers identifying decorative profile-photo/avatar elements (unaccented;
+# the Spanish strings of interest carry no accents, so casefold matching suffices).
+_AVATAR_MARKERS = (
+    "foto de perfil", "foto del perfil", "imagen de perfil",
+    "avatar", "profile picture", "profile photo",
+)
+
+
+def _is_avatar_element(el) -> bool:
+    """True when an element's text names a decorative profile photo/avatar."""
+    text = (_attr(el, "text") or "").casefold()
+    return any(marker in text for marker in _AVATAR_MARKERS)
+
+
+def _sanitize_screen(screen) -> list:
+    """Drop decorative avatar/profile-photo elements, preserving order and the
+    rest of the elements untouched, so the model never targets a profile photo."""
+    return [el for el in screen if not _is_avatar_element(el)]
+
 
 def _attr(el, name):
     # Elements may be dicts or objects (proto-derived/namedtuple).
@@ -134,8 +153,11 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
             # Feed the accumulated ReAct trace so the model emits the next step.
             messages.append(("human", _render_history(history)))
         if screen:
-            # Give the model the real screen structure so it can target elements.
-            messages.append(("human", _render_screen(screen)))
+            # Give the model the real screen structure so it can target elements,
+            # minus decorative avatars it would otherwise loop on tapping.
+            cleaned = _sanitize_screen(screen)
+            if cleaned:
+                messages.append(("human", _render_screen(cleaned)))
         try:
             response = await self._llm.ainvoke(messages)
         except Exception as exc:  # noqa: BLE001 - surface provider failures uniformly

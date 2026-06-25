@@ -1,7 +1,7 @@
 import asyncio
 from unittest.mock import patch
 
-from adapters.intent.gemini_function_calling_adapter import _SYSTEM_PROMPT
+from adapters.intent.gemini_function_calling_adapter import _SYSTEM_PROMPT, _sanitize_screen
 from application.dtos import ExecuteCommandInputDTO
 from application.use_cases.execute_command import ExecuteCommandUseCase
 from domain.intent.catalog import ACTION_CATALOG, openai_tools, spec_for_tool
@@ -235,6 +235,39 @@ def test_adapter_renders_screen_into_messages():
     assert "Elementos visibles en la pantalla actual" in rendered
     assert '[0] Button "Aceptar" (clickable)' in rendered
     assert '[1] EditText "Buscar" (focusable,editable)' in rendered
+
+
+def test_sanitize_screen_drops_avatars_preserves_text_rows():
+    # WhatsApp folds an avatar ImageView's accessibility description into `text`;
+    # those decorative rows must be stripped while every real row survives in order.
+    screen = [
+        {"index": 0, "role": "ImageView", "text": "Foto de perfil de María", "clickable": True},
+        {"index": 1, "role": "TextView", "text": "María"},
+        {"index": 2, "role": "TextView", "text": "¿Vienes hoy?"},
+        {"index": 3, "role": "ImageView", "text": "Foto de perfil de Juan", "clickable": True},
+        {"index": 4, "role": "TextView", "text": "Juan"},
+        {"index": 5, "role": "ImageButton", "text": "Ajustes", "clickable": True},
+    ]
+
+    cleaned = _sanitize_screen(screen)
+
+    texts = [el["text"] for el in cleaned]
+    assert texts == ["María", "¿Vienes hoy?", "Juan", "Ajustes"]
+    assert all("Foto de perfil" not in t for t in texts)
+
+
+def test_adapter_does_not_render_avatar_elements():
+    adapter, captured = _make_adapter(_StubResponse(content="vale"))
+    screen = [
+        {"index": 0, "role": "ImageView", "text": "Foto de perfil de María", "clickable": True},
+        {"index": 1, "role": "TextView", "text": "María"},
+    ]
+
+    asyncio.run(adapter.recognize("escríbele a María", screen=screen))
+
+    rendered = "\n".join(str(m) for m in captured.captured_messages)
+    assert "Foto de perfil" not in rendered
+    assert "María" in rendered
 
 
 def test_adapter_resolves_read_screen_tool_call():
