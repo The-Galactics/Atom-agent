@@ -78,6 +78,25 @@ class Settings(BaseSettings):
     memory_ttl_days: int = Field(30, env="MEMORY_TTL_DAYS")
     memory_prune_every: int = Field(20, env="MEMORY_PRUNE_EVERY")
 
+    # --- Authentication (HU-27 / ATOM-54) ---
+    # MongoDB user store.
+    mongo_url: str = Field("mongodb://localhost:27017", env="MONGO_URL")
+    mongo_db: str = Field("atom", env="MONGO_DB")
+    # Session tokens. JWT_SECRET enables auth (HS256). For RS256 set
+    # JWT_ALGORITHM=RS256 and provide PEM keys in JWT_SIGNING_KEY/JWT_VERIFYING_KEY.
+    jwt_secret: str | None = Field(None, env="JWT_SECRET")
+    jwt_algorithm: str = Field("HS256", env="JWT_ALGORITHM")
+    jwt_signing_key: str | None = Field(None, env="JWT_SIGNING_KEY")
+    jwt_verifying_key: str | None = Field(None, env="JWT_VERIFYING_KEY")
+    jwt_issuer: str = Field("atom-agent", env="JWT_ISSUER")
+    jwt_access_ttl_seconds: int = Field(900, env="JWT_ACCESS_TTL_SECONDS")
+    jwt_refresh_ttl_seconds: int = Field(2_592_000, env="JWT_REFRESH_TTL_SECONDS")
+    # Refresh-token store: Redis when REDIS_URL is set, else in-memory (single instance).
+    redis_url: str | None = Field(None, env="REDIS_URL")
+    # Google Sign-In: Web client ID used as the ID-token audience. Distinct from
+    # GOOGLE_API_KEY (which is for Gemini).
+    google_oauth_client_id: str | None = Field(None, env="GOOGLE_OAUTH_CLIENT_ID")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
