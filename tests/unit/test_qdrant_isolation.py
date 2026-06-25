@@ -26,7 +26,7 @@ def _adapter() -> QdrantAdapter:
     return a
 
 
-def test_search_filters_by_session_id():
+def test_search_filters_by_user_id():
     a = _adapter()
     asyncio.run(a.search("q", session_id="u1"))
     flt = a._client.query_points.call_args.kwargs["query_filter"]
@@ -49,8 +49,26 @@ def test_store_dedup_is_session_scoped_and_payload_tagged():
 
     # The dedup lookup was scoped to the same session.
     dedup_filter = a._client.query_points.call_args_list[0].kwargs["query_filter"]
+    assert dedup_filter.must[0].key == "user_id"
     assert dedup_filter.must[0].match.value == "u9"
 
     # The stored point carries user_id in its payload (so search can filter it).
     point = a._client.upsert.call_args.kwargs["points"][0]
     assert point.payload["user_id"] == "u9"
+
+
+def test_search_isolates_by_user():
+    """Cross-user isolation: a search for userB must filter by userB's user_id,
+    not by any other user's id.  This catches regressions where the filter key
+    reverts to 'session_id' or the value is taken from the wrong user."""
+    a = _adapter()
+
+    asyncio.run(a.search("q", session_id="userB"))
+
+    flt = a._client.query_points.call_args.kwargs["query_filter"]
+    assert isinstance(flt, rest.Filter)
+    cond = flt.must[0]
+    # Key must be "user_id", not "session_id" or anything else.
+    assert cond.key == "user_id"
+    # Value must be the *requesting* user, not some other user's id.
+    assert cond.match.value == "userB"
