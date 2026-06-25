@@ -345,10 +345,11 @@ server.add_secure_port(f"{cfg.grpc_host}:{port}", creds)   # ya NO add_insecure_
 
 ```python
 # infrastructure/grpc/auth_interceptor.py  (NUEVO)
-_PUBLIC = {"/atom.AtomAgentService/Register",
-           "/atom.AtomAgentService/Login",
-           "/atom.AtomAgentService/AuthenticateWithGoogle",
-           "/atom.AtomAgentService/RefreshToken"}
+# El package del proto es `com.atom.proto`, por eso la ruta completa del método.
+_PUBLIC = {"/com.atom.proto.AtomAgentService/Register",
+           "/com.atom.proto.AtomAgentService/Login",
+           "/com.atom.proto.AtomAgentService/AuthenticateWithGoogle",
+           "/com.atom.proto.AtomAgentService/RefreshToken"}
 
 class AuthInterceptor(grpc.aio.ServerInterceptor):
     def __init__(self, tokens: TokenServicePort): self._tokens = tokens
