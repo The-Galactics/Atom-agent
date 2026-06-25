@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from ports.user_repository_port import UserRepositoryPort
 
 from adapters.speech.faster_whisper_adapter import FasterWhisperAdapter
 from adapters.speech.kokoro_adapter import KokoroAdapter
@@ -67,13 +70,22 @@ class AppContainer:
     authenticate_use_case: Optional[AuthenticateUserUseCase] = None
     authenticate_with_google_use_case: Optional[AuthenticateWithGoogleUseCase] = None
     refresh_session_use_case: Optional[RefreshSessionUseCase] = None
-    user_repository: Optional[object] = None
+    user_repository: Optional["UserRepositoryPort"] = None
     auth_status: str = "ready"
 
     async def ensure_auth_indexes(self) -> None:
-        """Create the unique Mongo indexes (email, google_sub). No-op when auth is disabled."""
+        """Create the unique Mongo indexes (email, google_sub). No-op when auth is disabled.
+
+        Best-effort: if MongoDB is unreachable at startup the error is logged as a
+        warning and swallowed so the rest of the service (voice/chat) still starts.
+        Uniqueness at the use-case layer acts as a safety net until the indexes are
+        eventually created on the next successful startup.
+        """
         if self.user_repository is not None:
-            await self.user_repository.ensure_indexes()
+            try:
+                await self.user_repository.ensure_indexes()
+            except Exception as exc:
+                logger.warning("auth_index_init_failed error=%s", exc)
 
     def shutdown(self) -> None:
         if self.stt_adapter is not None:
@@ -310,7 +322,7 @@ def _load_pem(path: str | None) -> str | None:
 def _build_auth_stack(settings: Settings):
     """Construct the authentication stack defensively.
 
-    Returns ``(token_service, register, authenticate, google, refresh, status)``.
+    Returns ``(token_service, register, authenticate, google, refresh, user_repository, status)``.
     All are ``None`` when no JWT secret/signing key is configured (auth disabled),
     so the rest of the service still starts. Mongo/Redis clients connect lazily, so
     this never blocks startup on an unreachable database. Google login is only
