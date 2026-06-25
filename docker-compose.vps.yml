@@ -4,7 +4,8 @@
 #  - Los puertos de la API se publican SOLO en 127.0.0.1: no quedan expuestos a
 #    internet. nginx (en el host) termina TLS en :443 y hace proxy a estos
 #    puertos locales (gRPC -> 127.0.0.1:50051, HTTP -> 127.0.0.1:8050).
-#  - Qdrant no publica puertos: solo es accesible por la API en la red interna.
+#  - Qdrant (memoria) y Mongo (usuarios/auth) no publican puertos: solo son
+#    accesibles por la API en la red interna de compose.
 #  - Voz (Kokoro) desactivada vía .env para no agotar la RAM del VPS.
 #
 # Deploy:  git pull && docker compose -f docker-compose.vps.yml up -d --build
@@ -16,6 +17,13 @@ services:
     volumes:
       - ./qdrant_storage:/qdrant/storage
 
+  mongo:
+    image: mongo:7
+    container_name: atom-mongo
+    restart: unless-stopped
+    volumes:
+      - ./mongo_data:/data/db
+
   api:
     build:
       context: .
@@ -25,10 +33,12 @@ services:
     env_file:
       - .env
     environment:
-      # La API alcanza a Qdrant por el nombre de servicio en la red de compose.
+      # La API alcanza a sus dependencias por el nombre de servicio en la red de compose.
       QDRANT_URL: http://qdrant:6333
+      MONGO_URL: mongodb://mongo:27017
     ports:
       - "127.0.0.1:8050:8000"     # HTTP  -> nginx proxy_pass
       - "127.0.0.1:50051:50051"   # gRPC  -> nginx grpc_pass
     depends_on:
       - qdrant
+      - mongo
