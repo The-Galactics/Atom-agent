@@ -348,6 +348,20 @@ def test_system_prompt_prioritizes_instant_messaging_over_sms():
     assert "NUNCA ejecutes además un `OPEN_APP`" in prompt
 
 
+def test_system_prompt_contains_whatsapp_search_fallback():
+    import adapters.intent.gemini_function_calling_adapter as mod
+    prompt = mod._SYSTEM_PROMPT
+    # Scope the assertions to the fallback segment so they prove the rule is
+    # actually expressed there, not coincidentally present elsewhere.
+    start = prompt.index("FALLBACK DE BÚSQUEDA EN WHATSAPP")
+    segment = prompt[start:]
+    for kw in ("tap_element", "type_text", "fila"):
+        assert kw in segment
+    # The segment must not invite OPEN_APP unless it is the explicit prohibition,
+    # otherwise the lite model could re-open WhatsApp and fight the messaging rule.
+    assert "OPEN_APP" not in segment or "NUNCA emitas OPEN_APP" in segment
+
+
 def test_system_prompt_mandates_read_screen_tool():
     # The prompt must firmly instruct the lite model to call read_screen for
     # "read the screen" style requests rather than reply from context.
