@@ -90,7 +90,7 @@ class QdrantAdapter(VectorStorePort):
             ),
         )
         # Index created_at so TTL pruning (delete-by-range) stays efficient, and
-        # session_id so the per-user isolation filter stays fast.
+        # user_id so the per-user isolation filter stays fast.
         try:
             self.client.create_payload_index(
                 collection_name=self.collection_name,
@@ -99,7 +99,7 @@ class QdrantAdapter(VectorStorePort):
             )
             self._client.create_payload_index(
                 collection_name=self.collection_name,
-                field_name="session_id",
+                field_name="user_id",
                 field_schema=rest.PayloadSchemaType.KEYWORD,
             )
         except Exception as exc:  # non-fatal: filtering/pruning still works without it
@@ -112,8 +112,8 @@ class QdrantAdapter(VectorStorePort):
         await self._ensure_collection(len(vector))
 
         # #2 Dedup: skip storing a near-duplicate within the SAME session.
-        if self.dedup_threshold < 1.0 and self._is_duplicate(vector, metadata.get("session_id")):
-            logger.info("memory_dedup_skipped session_id=%s", metadata.get("session_id"))
+        if self.dedup_threshold < 1.0 and self._is_duplicate(vector, metadata.get("user_id")):
+            logger.info("memory_dedup_skipped user_id=%s", metadata.get("user_id"))
             return
 
         # Deterministic id on content+session so exact repeats collapse on upsert.
@@ -173,7 +173,7 @@ class QdrantAdapter(VectorStorePort):
             return None
         return rest.Filter(
             must=[rest.FieldCondition(
-                key="session_id", match=rest.MatchValue(value=session_id))]
+                key="user_id", match=rest.MatchValue(value=session_id))]
         )
 
     async def search(
