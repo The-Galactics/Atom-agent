@@ -238,12 +238,34 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             format=output.format
         )
 
+def grpc_server_options(settings) -> list[tuple[str, int]]:
+    """gRPC channel options that cap inbound/outbound message size (Fase 2A.2).
+
+    Bounds memory a single call can force the server to allocate.
+    """
+    max_bytes = settings.grpc_max_message_bytes
+    return [
+        ("grpc.max_receive_message_length", max_bytes),
+        ("grpc.max_send_message_length", max_bytes),
+    ]
+
+
+def grpc_max_concurrent_rpcs(settings) -> int:
+    """Upper bound on RPCs served concurrently (Fase 2A.2 back-pressure)."""
+    return settings.grpc_max_concurrent_rpcs
+
+
 async def serve(container, port: int = 50051):
-    # Enforce auth on protected RPCs (public auth RPCs pass through).
-    server = grpc.aio.server(interceptors=[AuthInterceptor(container.token_service)])
+    settings = container.settings
+    # Enforce auth on protected RPCs (public auth RPCs pass through); cap message
+    # size and concurrency so one client cannot exhaust memory or worker slots.
+    server = grpc.aio.server(
+        interceptors=[AuthInterceptor(container.token_service)],
+        options=grpc_server_options(settings),
+        maximum_concurrent_rpcs=grpc_max_concurrent_rpcs(settings),
+    )
     pb2_grpc.add_AtomAgentServiceServicer_to_server(AtomGrpcService(container), server)
 
-    settings = container.settings
     cert, key = settings.tls_cert_path, settings.tls_key_path
     if cert and key:
         with open(key, "rb") as k, open(cert, "rb") as c:
