@@ -29,8 +29,10 @@ class FakeVectorStore(VectorStorePort):
         self.results = results or []
         self.search_exc = search_exc
         self.stored = []
+        self.last_session_id = None
 
-    async def search(self, query, limit=5, score_threshold=0.5):
+    async def search(self, query, limit=5, score_threshold=0.5, session_id=None):
+        self.last_session_id = session_id
         if self.search_exc:
             raise self.search_exc
         return self.results
@@ -49,6 +51,8 @@ def test_retrieve_memory_joins_results():
     nodes = GraphNodes(FakeLLM(), vs)
     out = asyncio.run(nodes.retrieve_memory({"input": "q", "session_id": "s"}))
     assert out["context"] == "dato a\ndato b"
+    # Retrieval is isolated to this session/user.
+    assert vs.last_session_id == "s"
 
 
 def test_retrieve_memory_disabled_returns_empty():
@@ -120,4 +124,4 @@ def test_store_memory_persists_memorable_in_background():
     content, metadata = stored[0]
     assert "me llamo Andrés" in content
     assert "Encantado" in content
-    assert metadata == {"session_id": "s"}
+    assert metadata == {"user_id": "s"}

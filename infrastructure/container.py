@@ -2,7 +2,10 @@ from __future__ import annotations
 
 import logging
 from dataclasses import dataclass
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    from ports.user_repository_port import UserRepositoryPort
 
 from adapters.speech.faster_whisper_adapter import FasterWhisperAdapter
 from adapters.speech.kokoro_adapter import KokoroAdapter
@@ -17,6 +20,11 @@ from application.use_cases.chat import ChatUseCase
 from application.use_cases.execute_command import ExecuteCommandUseCase
 from application.use_cases.synthesize_speech import SynthesizeSpeechUseCase
 from application.use_cases.transcribe_audio import TranscribeAudioUseCase
+from application.use_cases.register_user import RegisterUserUseCase
+from application.use_cases.authenticate_user import AuthenticateUserUseCase
+from application.use_cases.authenticate_with_google import AuthenticateWithGoogleUseCase
+from application.use_cases.refresh_session import RefreshSessionUseCase
+from ports.token_service_port import TokenServicePort
 from domain.value_objects import AudioFormat
 from infrastructure.config import Settings
 from infrastructure.provider_clients import KokoroClient
@@ -56,6 +64,28 @@ class AppContainer:
     intent_status: str = "ready"
     # Human-readable reason the LLM/chat stack is unavailable, when applicable.
     llm_status: str = "ready"
+    # Authentication stack (HU-27). All None when no JWT secret is configured.
+    token_service: Optional[TokenServicePort] = None
+    register_use_case: Optional[RegisterUserUseCase] = None
+    authenticate_use_case: Optional[AuthenticateUserUseCase] = None
+    authenticate_with_google_use_case: Optional[AuthenticateWithGoogleUseCase] = None
+    refresh_session_use_case: Optional[RefreshSessionUseCase] = None
+    user_repository: Optional["UserRepositoryPort"] = None
+    auth_status: str = "ready"
+
+    async def ensure_auth_indexes(self) -> None:
+        """Create the unique Mongo indexes (email, google_sub). No-op when auth is disabled.
+
+        Best-effort: if MongoDB is unreachable at startup the error is logged as a
+        warning and swallowed so the rest of the service (voice/chat) still starts.
+        Uniqueness at the use-case layer acts as a safety net until the indexes are
+        eventually created on the next successful startup.
+        """
+        if self.user_repository is not None:
+            try:
+                await self.user_repository.ensure_indexes()
+            except Exception as exc:
+                logger.warning("auth_index_init_failed error=%s", exc)
 
     def shutdown(self) -> None:
         if self.stt_adapter is not None:
@@ -277,6 +307,84 @@ def _build_llm_stack(settings: Settings, history_adapter: HistoryPort):
         return None, None, None, None, f"llm provider unavailable: {exc}"
 
 
+def _load_pem(path: str | None) -> str | None:
+    """Read a PEM key file, or return None if no path is set or it is unreadable."""
+    if not path:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except OSError as exc:
+        logger.warning("jwt_key_read_failed path=%s error=%s", path, exc)
+        return None
+
+
+def _build_auth_stack(settings: Settings):
+    """Construct the authentication stack defensively.
+
+    Returns ``(token_service, register, authenticate, google, refresh, user_repository, status)``.
+    All are ``None`` when no JWT secret/signing key is configured (auth disabled),
+    so the rest of the service still starts. Mongo/Redis clients connect lazily, so
+    this never blocks startup on an unreachable database. Google login is only
+    built when ``GOOGLE_OAUTH_CLIENT_ID`` is set (email/password still works).
+    """
+    alg = (settings.jwt_algorithm or "RS256").upper()
+    if alg == "HS256":
+        signing_key = settings.jwt_secret or settings.jwt_signing_key
+        verifying_key = None  # HS256: the verifying key IS the signing secret.
+        if not signing_key:
+            return None, None, None, None, None, None, "auth disabled: set JWT_SECRET (HS256)"
+    else:
+        signing_key = _load_pem(settings.jwt_private_key_path) or settings.jwt_signing_key
+        verifying_key = _load_pem(settings.jwt_public_key_path) or settings.jwt_verifying_key
+        if not (signing_key and verifying_key):
+            return None, None, None, None, None, None, (
+                f"auth disabled: {alg} needs a PEM keypair "
+                "(set JWT_PRIVATE_KEY_PATH/JWT_PUBLIC_KEY_PATH; run scripts/gen_jwt_keys.py)"
+            )
+    try:
+        from motor.motor_asyncio import AsyncIOMotorClient
+        from adapters.user_store.mongo_user_repository import MongoUserRepository
+        from adapters.security.argon2_password_hasher import Argon2PasswordHasher
+        from adapters.security.jwt_token_service import JwtTokenService
+        from adapters.security.in_memory_refresh_token_store import InMemoryRefreshTokenStore
+
+        users = MongoUserRepository(AsyncIOMotorClient(settings.mongo_url), settings.mongo_db)
+        hasher = Argon2PasswordHasher()
+
+        if settings.redis_url:
+            from redis.asyncio import from_url
+            from adapters.security.redis_refresh_token_store import RedisRefreshTokenStore
+            refresh_store = RedisRefreshTokenStore(from_url(settings.redis_url))
+        else:
+            refresh_store = InMemoryRefreshTokenStore()
+
+        tokens = JwtTokenService(
+            refresh_store,
+            signing_key=signing_key,
+            verifying_key=verifying_key,
+            algorithm=alg,
+            access_ttl_seconds=settings.jwt_access_ttl_seconds,
+            refresh_ttl_seconds=settings.jwt_refresh_ttl_seconds,
+            issuer=settings.jwt_issuer,
+        )
+
+        register = RegisterUserUseCase(users, hasher, tokens)
+        authenticate = AuthenticateUserUseCase(users, hasher, tokens)
+        refresh = RefreshSessionUseCase(tokens)
+
+        google = None
+        if settings.google_oauth_client_id:
+            from adapters.security.google_id_token_verifier import GoogleIdTokenVerifier
+            verifier = GoogleIdTokenVerifier(settings.google_oauth_client_id)
+            google = AuthenticateWithGoogleUseCase(users, verifier, tokens)
+
+        return tokens, register, authenticate, google, refresh, users, "ready"
+    except Exception as exc:  # pragma: no cover - defensive
+        logger.warning("auth_init_failed error=%s", exc)
+        return None, None, None, None, None, None, f"auth unavailable: {exc}"
+
+
 def build_container(settings: Settings) -> AppContainer:
     kokoro_client, stt_adapter, tts_adapter, voice_status = _build_voice_adapters(settings)
 
@@ -318,6 +426,16 @@ def build_container(settings: Settings) -> AppContainer:
     # to StreamChat (which uses chat_use_case) for the grounded reply.
     execute_command_use_case, intent_status = _build_intent_use_case(settings, embedding_adapter)
 
+    (
+        token_service,
+        register_use_case,
+        authenticate_use_case,
+        authenticate_with_google_use_case,
+        refresh_session_use_case,
+        user_repository,
+        auth_status,
+    ) = _build_auth_stack(settings)
+
     if transcribe_use_case is None or synthesize_use_case is None:
         logger.warning("voice_degraded detail=%s", voice_status)
     if chat_use_case is None:
@@ -341,4 +459,11 @@ def build_container(settings: Settings) -> AppContainer:
         voice_status=voice_status,
         intent_status=intent_status,
         llm_status=llm_status,
+        token_service=token_service,
+        register_use_case=register_use_case,
+        authenticate_use_case=authenticate_use_case,
+        authenticate_with_google_use_case=authenticate_with_google_use_case,
+        refresh_session_use_case=refresh_session_use_case,
+        user_repository=user_repository,
+        auth_status=auth_status,
     )

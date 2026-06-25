@@ -8,6 +8,12 @@ option java_outer_classname = "AiProto";
 
 service AtomAgentService {
 
+  // --- Auth (HU-27): these RPCs do NOT require an access token ---
+  rpc Register               (RegisterRequest)   returns (AuthResponse);
+  rpc Login                  (LoginRequest)      returns (AuthResponse);
+  rpc AuthenticateWithGoogle (GoogleAuthRequest) returns (AuthResponse);
+  rpc RefreshToken           (RefreshRequest)    returns (AuthResponse);
+
   // Conversational AI (Unary call)
   rpc ExecuteCommand (CommandRequest) returns (CommandResponse);
 
@@ -20,6 +26,35 @@ service AtomAgentService {
   // Voice: Text-to-Speech
   rpc Synthesize (SynthesizeRequest) returns (stream SynthesizeResponse);
 
+}
+
+// --- Auth Messages (HU-27 / ATOM-54) ---
+
+message RegisterRequest {
+  string email = 1;
+  string password = 2;         // plaintext only over TLS; hashed (Argon2id) server-side
+  string display_name = 3;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+// OIDC ID token issued by Google (verified server-side: signature, aud, exp, email_verified).
+message GoogleAuthRequest {
+  string id_token = 1;
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message AuthResponse {
+  string access_token = 1;     // short-lived signed JWT
+  string refresh_token = 2;    // opaque, revocable (single-use rotation)
+  int64 expires_in = 3;        // access-token lifetime in seconds
+  string user_id = 4;
 }
 
 // --- Chat Messages ---
@@ -37,7 +72,9 @@ message ScreenElement {
 }
 
 message CommandRequest {
-  string user_id = 1;
+  // DEPRECATED: ignored by the server, which derives the identity from the
+  // verified access token (Authorization metadata). Kept for back-compat.
+  string user_id = 1 [deprecated = true];
   string command = 2;
   // Current on-screen map; empty when the accessibility service is disabled.
   repeated ScreenElement screen_elements = 3;
@@ -64,7 +101,9 @@ message CommandResponse {
 }
 
 message MessageRequest {
-  string user_id = 1;
+  // DEPRECATED: ignored by the server, which derives the identity from the
+  // verified access token (Authorization metadata). Kept for back-compat.
+  string user_id = 1 [deprecated = true];
   string chat_id = 2;
   string message = 3;
 }
