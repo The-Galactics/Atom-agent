@@ -15,7 +15,7 @@
 Cambios de esta iteración:
 - **Fix de embeddings (causa raíz):** el fallo era un **mismatch de dimensión**
   (`models/embedding-001`=768 vs `qdrant_vector_size`=3072). Se consolida el modelo a
-  `models/gemini-embeddings-2` en los 3 sitios divergentes y `QdrantAdapter` ahora
+  `models/gemini-embedding-2` en los 3 sitios divergentes y `QdrantAdapter` ahora
   **auto-detecta la dimensión** del primer embedding (`qdrant_vector_size=0` ⇒ auto),
   eliminando esa clase de bug.
 - **Caché de acciones (`CachingIntentRecognizer`):** decorador sobre `IntentRecognizerPort`.
@@ -37,7 +37,7 @@ Resultado: **`tests/unit` → 104 passed, 0 failed** (Docker `atom-agent-api:lat
 `PYTHONPATH=/app`). El orquestador ReAct y la suite previa siguen en verde.
 
 **Verificación viva PENDIENTE (bloqueada):** el `.env` con `GOOGLE_API_KEY` ya no está en el
-repo, así que falta (a) confirmar que el id `models/gemini-embeddings-2` existe y su dimensión
+repo, así que falta (a) confirmar que el id `models/gemini-embedding-2` existe y su dimensión
 real, y (b) el E2E (comando repetido → `cache_hit` sin LLM; colección `skills` poblada). Se
 hará al restaurar `.env`.
 

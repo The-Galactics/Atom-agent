@@ -42,7 +42,7 @@ class Settings(BaseSettings):
     # use (the robust default: a wrong fixed value here was the cause of the
     # "embeddings failing" mismatch). Set a positive value only to pin a size.
     qdrant_vector_size: int = Field(0, env="QDRANT_VECTOR_SIZE")
-    embedding_model: str = Field("models/gemini-embeddings-2", env="EMBEDDING_MODEL")
+    embedding_model: str = Field("models/gemini-embedding-2", env="EMBEDDING_MODEL")
 
     # Cap on in-memory chat history per session. 20 (~10 turns) is plenty for a
     # phone assistant and keeps the prompt/latency/cost small.
