@@ -4,7 +4,7 @@ from ports.embedding_port import EmbeddingPort
 
 class GeminiEmbeddingAdapter(EmbeddingPort):
     # Embedding adapter backed by Google Generative AI embeddings.
-    def __init__(self, api_key: str, model: str = "models/text-embedding-004"):
+    def __init__(self, api_key: str, model: str = "models/gemini-embedding-001"):
         self.embeddings = GoogleGenerativeAIEmbeddings(
             model=model,
             google_api_key=api_key
