@@ -289,6 +289,18 @@ def _build_llm_stack(settings: Settings, history_adapter: HistoryPort):
         return None, None, None, None, f"llm provider unavailable: {exc}"
 
 
+def _load_pem(path: str | None) -> str | None:
+    """Read a PEM key file, or return None if no path is set or it is unreadable."""
+    if not path:
+        return None
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except OSError as exc:
+        logger.warning("jwt_key_read_failed path=%s error=%s", path, exc)
+        return None
+
+
 def _build_auth_stack(settings: Settings):
     """Construct the authentication stack defensively.
 
@@ -298,9 +310,20 @@ def _build_auth_stack(settings: Settings):
     this never blocks startup on an unreachable database. Google login is only
     built when ``GOOGLE_OAUTH_CLIENT_ID`` is set (email/password still works).
     """
-    secret = settings.jwt_signing_key or settings.jwt_secret
-    if not secret:
-        return None, None, None, None, None, "auth disabled: JWT secret not set"
+    alg = (settings.jwt_algorithm or "RS256").upper()
+    if alg == "HS256":
+        signing_key = settings.jwt_secret or settings.jwt_signing_key
+        verifying_key = None  # HS256: the verifying key IS the signing secret.
+        if not signing_key:
+            return None, None, None, None, None, "auth disabled: set JWT_SECRET (HS256)"
+    else:
+        signing_key = _load_pem(settings.jwt_private_key_path) or settings.jwt_signing_key
+        verifying_key = _load_pem(settings.jwt_public_key_path) or settings.jwt_verifying_key
+        if not (signing_key and verifying_key):
+            return None, None, None, None, None, (
+                f"auth disabled: {alg} needs a PEM keypair "
+                "(set JWT_PRIVATE_KEY_PATH/JWT_PUBLIC_KEY_PATH; run scripts/gen_jwt_keys.py)"
+            )
     try:
         from motor.motor_asyncio import AsyncIOMotorClient
         from adapters.user_store.mongo_user_repository import MongoUserRepository
@@ -320,9 +343,9 @@ def _build_auth_stack(settings: Settings):
 
         tokens = JwtTokenService(
             refresh_store,
-            signing_key=secret,
-            verifying_key=settings.jwt_verifying_key,
-            algorithm=settings.jwt_algorithm,
+            signing_key=signing_key,
+            verifying_key=verifying_key,
+            algorithm=alg,
             access_ttl_seconds=settings.jwt_access_ttl_seconds,
             refresh_ttl_seconds=settings.jwt_refresh_ttl_seconds,
             issuer=settings.jwt_issuer,

@@ -11,6 +11,13 @@ services:
     volumes:
       - ./qdrant_storage:/qdrant/storage
 
+  # User store for authentication. Internal only — no published port, reachable
+  # by the api service as host "mongo" on the default Docker network.
+  mongo:
+    image: mongo:7
+    volumes:
+      - ./mongo_storage:/data/db
+
   api:
     build:
       context: .
@@ -20,6 +27,7 @@ services:
     depends_on:
       - kokoro
       - qdrant
+      - mongo
     env_file:
       - .env
     environment:
@@ -27,5 +35,6 @@ services:
       KOKORO_DEFAULT_VOICE: ${KOKORO_DEFAULT_VOICE:-af_heart}
       GOOGLE_API_KEY: ${GOOGLE_API_KEY}
       QDRANT_URL: http://qdrant:6333
+      MONGO_URL: mongodb://mongo:27017
     ports:
       - "${VOICE_API_PORT:-8000}:8000"

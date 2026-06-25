@@ -250,6 +250,12 @@ async def serve(container, port: int = 50051):
             credentials = grpc.ssl_server_credentials([(k.read(), c.read())])
         server.add_secure_port(f"[::]:{port}", credentials)
         logger.info("gRPC server (TLS) started on port %d", port)
+    elif settings.app_env.lower() in ("production", "prod"):
+        # Guardrail: never serve cleartext gRPC in production.
+        raise RuntimeError(
+            "Refusing to start gRPC without TLS while APP_ENV=production. "
+            "Set TLS_CERT_PATH and TLS_KEY_PATH (or run with APP_ENV=development for local dev)."
+        )
     else:
         # Development only: no transport encryption. Configure TLS_CERT_PATH /
         # TLS_KEY_PATH for any real deployment.

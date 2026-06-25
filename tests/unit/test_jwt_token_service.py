@@ -68,3 +68,48 @@ def test_revoke_invalidates_refresh():
     pair = asyncio.run(svc.issue_pair("user-1"))
     asyncio.run(svc.revoke(pair.refresh_token))
     assert asyncio.run(svc.rotate(pair.refresh_token)) is None
+
+
+def _rsa_keypair() -> tuple[str, str]:
+    from cryptography.hazmat.primitives import serialization
+    from cryptography.hazmat.primitives.asymmetric import rsa
+
+    key = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+    private_pem = key.private_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PrivateFormat.PKCS8,
+        encryption_algorithm=serialization.NoEncryption(),
+    ).decode()
+    public_pem = key.public_key().public_bytes(
+        encoding=serialization.Encoding.PEM,
+        format=serialization.PublicFormat.SubjectPublicKeyInfo,
+    ).decode()
+    return private_pem, public_pem
+
+
+def test_rs256_issue_and_verify():
+    private_pem, public_pem = _rsa_keypair()
+    svc = JwtTokenService(
+        InMemoryRefreshTokenStore(),
+        signing_key=private_pem,
+        verifying_key=public_pem,
+        algorithm="RS256",
+        issuer="atom-agent",
+    )
+    pair = asyncio.run(svc.issue_pair("user-1", "u@b.com"))
+    principal = svc.verify_access(pair.access_token)
+    assert isinstance(principal, Principal)
+    assert principal.user_id == "user-1"
+    assert principal.email == "u@b.com"
+
+
+def test_rs256_rejects_token_signed_by_other_key():
+    priv_a, _ = _rsa_keypair()
+    _, pub_b = _rsa_keypair()
+    issuer = JwtTokenService(
+        InMemoryRefreshTokenStore(), signing_key=priv_a,
+        verifying_key=pub_b, algorithm="RS256",
+    )
+    # Sign with key A but verify against the unrelated public key B → rejected.
+    pair = asyncio.run(issuer.issue_pair("user-1"))
+    assert issuer.verify_access(pair.access_token) is None
