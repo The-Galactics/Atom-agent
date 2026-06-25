@@ -124,6 +124,18 @@ class Settings(BaseSettings):
     tls_cert_path: str | None = Field(None, env="TLS_CERT_PATH")
     tls_key_path: str | None = Field(None, env="TLS_KEY_PATH")
 
+    # --- Hardening (Fase 2A) ---
+    # gRPC transport limits (2A.2): cap message size and bound concurrency so a
+    # single oversized/abusive client cannot exhaust memory or worker slots.
+    grpc_max_message_bytes: int = Field(8 * 1024 * 1024, env="GRPC_MAX_MESSAGE_BYTES")
+    grpc_max_concurrent_rpcs: int = Field(64, env="GRPC_MAX_CONCURRENT_RPCS")
+    # NOTE: per-RPC handler timeouts (2A.2) are deferred to the gRPC hardening HU
+    # (they need each handler wrapped in asyncio.wait_for; no native gRPC option).
+    # HTTP hardening (2A.3): per-request body cap + per-client sliding-window rate limit.
+    http_max_body_bytes: int = Field(1 * 1024 * 1024, env="HTTP_MAX_BODY_BYTES")
+    rate_limit_max_requests: int = Field(120, env="RATE_LIMIT_MAX_REQUESTS")
+    rate_limit_window_seconds: float = Field(60.0, env="RATE_LIMIT_WINDOW_SECONDS")
+
     class Config:
         env_file = ".env"
         env_file_encoding = "utf-8"
