@@ -45,6 +45,26 @@ def test_readiness_reflects_wiring():
     assert providers["llm"]["model"] == "gemini-3.1-flash-lite"
     assert providers["intent"]["status"] == "ready"
     assert providers["voice"]["status"] == "degraded"
+    # Conversational long-term memory is off by default; the action cache is on.
+    assert providers["vector_store"]["status"] == "disabled"
+    assert providers["skills"]["status"] == "enabled"
+    assert providers["skills"]["collection"] == "skills"
+
+
+def test_intent_recognizer_is_cached_when_skills_enabled():
+    from adapters.intent.caching_intent_recognizer import CachingIntentRecognizer
+
+    container = build_container(_settings(skills_enabled=True))
+    recognizer = container.execute_command_use_case.intent_recognizer
+    assert isinstance(recognizer, CachingIntentRecognizer)
+
+
+def test_intent_recognizer_not_cached_when_skills_disabled():
+    from adapters.intent.caching_intent_recognizer import CachingIntentRecognizer
+
+    container = build_container(_settings(skills_enabled=False))
+    recognizer = container.execute_command_use_case.intent_recognizer
+    assert not isinstance(recognizer, CachingIntentRecognizer)
 
 
 def test_shutdown_is_safe_without_voice_adapters():
@@ -54,7 +74,7 @@ def test_shutdown_is_safe_without_voice_adapters():
 
 
 def test_intent_use_case_unavailable_without_api_key():
-    use_case, status = _build_intent_use_case(_settings(google_api_key=None))
+    use_case, status = _build_intent_use_case(_settings(google_api_key=None), None)
     assert use_case is None
     assert "GOOGLE_API_KEY" in status
 

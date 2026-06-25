@@ -38,14 +38,15 @@ class Settings(BaseSettings):
     qdrant_url: str = Field("http://localhost:6333", env="QDRANT_URL")
     qdrant_api_key: str | None = Field(None, env="QDRANT_API_KEY")
     qdrant_collection: str = Field("memory", env="QDRANT_COLLECTION")
-    # Embedding dimensionality — must match the configured embedding model
-    # (e.g. gemini text-embedding models are 3072-dim).
-    qdrant_vector_size: int = Field(3072, env="QDRANT_VECTOR_SIZE")
-    embedding_model: str = Field("models/embedding-001", env="EMBEDDING_MODEL")
+    # Embedding dimensionality. 0 = auto-detect from the embedding model on first
+    # use (the robust default: a wrong fixed value here was the cause of the
+    # "embeddings failing" mismatch). Set a positive value only to pin a size.
+    qdrant_vector_size: int = Field(0, env="QDRANT_VECTOR_SIZE")
+    embedding_model: str = Field("models/gemini-embeddings-2", env="EMBEDDING_MODEL")
 
-    # Cap on in-memory chat history per session to bound memory growth in
-    # long-running deployments (oldest messages are dropped past this limit).
-    history_max_messages_per_session: int = Field(50, env="HISTORY_MAX_MESSAGES_PER_SESSION")
+    # Cap on in-memory chat history per session. 20 (~10 turns) is plenty for a
+    # phone assistant and keeps the prompt/latency/cost small.
+    history_max_messages_per_session: int = Field(20, env="HISTORY_MAX_MESSAGES_PER_SESSION")
 
     # ReAct orchestrator: max actions per task before forced completion, plus
     # bounds for the per-session action trace store.
@@ -58,7 +59,22 @@ class Settings(BaseSettings):
     # optional STT/TTS stack to be importable, and memory degrades silently
     # to LLM-only when Qdrant / embeddings are unavailable.
     voice_enabled: bool = Field(True, env="VOICE_ENABLED")
-    memory_enabled: bool = Field(True, env="MEMORY_ENABLED")
+    # Conversational long-term semantic memory (Qdrant) is OFF: short-term
+    # history (history_max_messages_per_session) is enough for a phone assistant,
+    # and the vector store is now used for the action cache (see skills_* below).
+    memory_enabled: bool = Field(False, env="MEMORY_ENABLED")
+
+    # Action cache ("skill memory"): caches resolved single-shot, screen-independent
+    # commands (open_app/set_alarm/set_timer/toggle_setting) so a repeated command
+    # is answered from Qdrant without calling the LLM. Multi-step/screen-dependent
+    # and sensitive actions are never cached (they always go to the LLM).
+    #   - hit_threshold: cosine similarity required to reuse a cached action; high
+    #     so "abre spotify" never returns the cached "abre whatsapp".
+    #   - ttl_days: 0 disables expiry (skills are stable, unlike chat memory).
+    skills_enabled: bool = Field(True, env="SKILLS_ENABLED")
+    skills_collection: str = Field("skills", env="SKILLS_COLLECTION")
+    skills_hit_threshold: float = Field(0.97, env="SKILLS_HIT_THRESHOLD")
+    skills_ttl_days: int = Field(0, env="SKILLS_TTL_DAYS")
 
     # Deploy-only: host port docker-compose maps to the API container (see
     # docker-compose.yml `${VOICE_API_PORT:-8000}:8000`). It lives in `.env`,
