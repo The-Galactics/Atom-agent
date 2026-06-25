@@ -20,6 +20,10 @@ async def lifespan(app: FastAPI):
     container = build_container(settings)
     app.state.voice_container = container
 
+    # Create unique indexes (email, google_sub) so DB-level uniqueness is enforced
+    # against the double-registration race (HU-27 / ATOM-54 §5.2). No-op if auth off.
+    await container.ensure_auth_indexes()
+
     # Start gRPC server in a background task (listens on :50051 by default)
     grpc_task = asyncio.create_task(
         start_grpc_server(container, port=getattr(settings, "grpc_port", 50051))
