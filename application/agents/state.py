@@ -1,3 +1,4 @@
+import operator
 from typing import Annotated, TypedDict, List
 from domain.conversation.models import ChatMessage
 
@@ -10,8 +11,9 @@ class AgentState(TypedDict):
     # Raw user input that will be routed through retrieve/generate nodes.
     input: str
 
-    # Chat history; annotated for LangGraph to append during execution.
-    messages: Annotated[List[ChatMessage], "add"]
+    # Chat history; operator.add makes LangGraph APPEND node outputs (a string
+    # reducer like "add" is ignored and silently overwrites).
+    messages: Annotated[List[ChatMessage], operator.add]
 
     # Retrieved semantic context (built in retrieve_memory).
     context: str
