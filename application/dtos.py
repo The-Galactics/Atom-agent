@@ -62,6 +62,10 @@ class ExecuteCommandInputDTO:
     # Per-command id scoping the ReAct trace. Falls back to user_id when the
     # client doesn't supply one (back-compat). A new order id => fresh history.
     order_id: str | None = None
+    # Action types that require the conversational "ask first" confirmation for
+    # this user. None => the default outward-facing set (DEFAULT_CONFIRM_ACTIONS:
+    # MAKE_CALL, SEND_MESSAGE); an empty set => confirm nothing (full autonomy).
+    confirm_actions: frozenset[str] | None = None
 
 
 @dataclass

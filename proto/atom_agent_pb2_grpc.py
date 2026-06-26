@@ -74,6 +74,16 @@ class AtomAgentServiceStub:
                 request_serializer=proto_dot_atom__agent__pb2.SynthesizeRequest.SerializeToString,
                 response_deserializer=proto_dot_atom__agent__pb2.SynthesizeResponse.FromString,
                 _registered_method=True)
+        self.GetSettings = channel.unary_unary(
+                '/com.atom.proto.AtomAgentService/GetSettings',
+                request_serializer=proto_dot_atom__agent__pb2.SettingsRequest.SerializeToString,
+                response_deserializer=proto_dot_atom__agent__pb2.SettingsResponse.FromString,
+                _registered_method=True)
+        self.UpdateSettings = channel.unary_unary(
+                '/com.atom.proto.AtomAgentService/UpdateSettings',
+                request_serializer=proto_dot_atom__agent__pb2.UpdateSettingsRequest.SerializeToString,
+                response_deserializer=proto_dot_atom__agent__pb2.SettingsResponse.FromString,
+                _registered_method=True)
 
 
 class AtomAgentServiceServicer:
@@ -132,6 +142,20 @@ class AtomAgentServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetSettings(self, request, context):
+        """User settings (synced client preferences, incl. which actions require
+        spoken confirmation). Identity comes from the access token.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateSettings(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AtomAgentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -174,6 +198,16 @@ def add_AtomAgentServiceServicer_to_server(servicer, server):
                     servicer.Synthesize,
                     request_deserializer=proto_dot_atom__agent__pb2.SynthesizeRequest.FromString,
                     response_serializer=proto_dot_atom__agent__pb2.SynthesizeResponse.SerializeToString,
+            ),
+            'GetSettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSettings,
+                    request_deserializer=proto_dot_atom__agent__pb2.SettingsRequest.FromString,
+                    response_serializer=proto_dot_atom__agent__pb2.SettingsResponse.SerializeToString,
+            ),
+            'UpdateSettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateSettings,
+                    request_deserializer=proto_dot_atom__agent__pb2.UpdateSettingsRequest.FromString,
+                    response_serializer=proto_dot_atom__agent__pb2.SettingsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -392,6 +426,60 @@ class AtomAgentService:
             '/com.atom.proto.AtomAgentService/Synthesize',
             proto_dot_atom__agent__pb2.SynthesizeRequest.SerializeToString,
             proto_dot_atom__agent__pb2.SynthesizeResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/com.atom.proto.AtomAgentService/GetSettings',
+            proto_dot_atom__agent__pb2.SettingsRequest.SerializeToString,
+            proto_dot_atom__agent__pb2.SettingsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateSettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/com.atom.proto.AtomAgentService/UpdateSettings',
+            proto_dot_atom__agent__pb2.UpdateSettingsRequest.SerializeToString,
+            proto_dot_atom__agent__pb2.SettingsResponse.FromString,
             options,
             channel_credentials,
             insecure,

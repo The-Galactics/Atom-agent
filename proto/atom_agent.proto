@@ -26,6 +26,11 @@ service AtomAgentService {
   // Voice: Text-to-Speech
   rpc Synthesize (SynthesizeRequest) returns (stream SynthesizeResponse);
 
+  // User settings (synced client preferences, incl. which actions require
+  // spoken confirmation). Identity comes from the access token.
+  rpc GetSettings    (SettingsRequest)       returns (SettingsResponse);
+  rpc UpdateSettings (UpdateSettingsRequest) returns (SettingsResponse);
+
 }
 
 // --- Auth Messages (HU-27 / ATOM-54) ---
@@ -78,6 +83,10 @@ message CommandRequest {
   string command = 2;
   // Current on-screen map; empty when the accessibility service is disabled.
   repeated ScreenElement screen_elements = 3;
+  // Client-generated id scoping ONE ReAct task/order across its turns (incl. the
+  // confirmation question + the user's "sí/no" reply). A new id => fresh trace.
+  // Optional; empty falls back to the user identity (legacy behavior).
+  string order_id = 4;
 }
 
 message CommandResponse {
@@ -98,6 +107,23 @@ message CommandResponse {
   bool task_complete = 7;
   // Current ReAct step index for this session (telemetry/debug).
   int32 step = 8;
+}
+
+// --- User settings ---
+
+// Settings are carried as a JSON object string (the same blob the client syncs
+// into User.settings), so adding new preferences never requires a proto change.
+message SettingsRequest {}
+
+message UpdateSettingsRequest {
+  // JSON object merged into the user's stored settings, e.g.
+  // {"confirmation": {"require_for": ["MAKE_CALL", "SEND_MESSAGE"]}}.
+  string settings_json = 1;
+}
+
+message SettingsResponse {
+  // The user's full settings as a JSON object string.
+  string settings_json = 1;
 }
 
 message MessageRequest {

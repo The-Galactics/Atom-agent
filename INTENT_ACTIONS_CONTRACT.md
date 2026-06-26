@@ -32,9 +32,10 @@ Service `AtomAgentService` in `proto/atom_agent.proto`:
 rpc ExecuteCommand (CommandRequest) returns (CommandResponse);
 
 message CommandRequest {
-  string user_id = 1;
+  string user_id = 1;                       // DEPRECATED: identity comes from the access token
   string command = 2;                       // the user's natural-language order (text)
   repeated ScreenElement screen_elements = 3; // structured screen map (accessibility)
+  string order_id = 4;                      // stable id for all turns of one task; new id => fresh trace
 }
 
 message ScreenElement {
@@ -128,16 +129,38 @@ Order — open an app:
 }
 ```
 
-Sensitive order — confirm first:
+Sensitive order — conversational confirmation (two turns):
+
+Sensitive actions (by default `MAKE_CALL`, `SEND_MESSAGE`; per-user configurable)
+are **not** executed on the spot. The backend asks out loud and holds the action
+until the user replies. **Turn 1** returns `action_type: "NONE"` with the question
+in `out_message` and `requires_confirmation: false` (the client must NOT pop its
+own dialog — it just speaks/shows the question and listens):
 
 ```json
 {
   "success": true,
-  "out_message": "¿Quieres que llame a mamá?",
+  "out_message": "¿Confirmas que llame a mamá?",
+  "action_type": "NONE",
+  "parameters_json": "{}",
+  "confidence": 1.0,
+  "requires_confirmation": false,
+  "task_complete": false
+}
+```
+
+**Turn 2** — the client sends the user's spoken reply (e.g. `"sí"` / `"no"`) as a
+normal `command` **with the same `order_id`**. On "sí" the backend emits the held
+action to execute; on "no" it returns `NONE` + `task_complete: true`:
+
+```json
+{
+  "success": true,
+  "out_message": "De acuerdo, lo hago.",
   "action_type": "MAKE_CALL",
   "parameters_json": "{\"target\": \"mamá\"}",
   "confidence": 1.0,
-  "requires_confirmation": true
+  "requires_confirmation": false
 }
 ```
 
@@ -156,13 +179,39 @@ Conversation — no action:
 
 ## Android client expectations
 
-1. Send the recognized order text (from STT or the text box) as `command`.
+1. Send the recognized order text (from STT or the text box) as `command`, and a
+   client-generated **`order_id`** that stays constant for all turns of one task
+   (including the confirmation question and the user's "sí/no" reply). A new
+   `order_id` starts a fresh ReAct trace; empty falls back to the user identity.
 2. Parse `parameters_json` into a map.
-3. If `requires_confirmation` is true (or confidence is low), show a confirm
-   prompt using `out_message` before executing.
+3. **Conversational confirmation:** when the backend asks (a `NONE` turn whose
+   `out_message` is a question and `task_complete: false`), speak/show the
+   question and capture the user's spoken reply, then send it as the next
+   `command` **with the same `order_id`**. The backend interprets "sí/no" and
+   either emits the action to execute or cancels. Do **not** pop a local confirm
+   dialog for these — `requires_confirmation` stays `false` on this path. (The
+   legacy `requires_confirmation` flag is only emitted when an action is left
+   outside the user's confirm set; it remains for back-compat.)
 4. Dispatch on `action_type` to the matching handler; `NONE` ⇒ just present
-   `out_message` (and optionally synthesize it via `/voice/synthesize`).
+   `out_message` (and optionally synthesize it via `/voice/synthesize`). When
+   `task_complete: false` on an executed action, re-capture the screen and call
+   `ExecuteCommand` again (same `order_id`) to continue the ReAct loop.
 5. Treat an **unknown** `action_type` (client older than backend) as `NONE`.
+
+### User settings (confirmation scope)
+
+Which action types require the spoken confirmation is per-user and configurable
+via two gRPC RPCs (protected — access token required):
+
+- `GetSettings(SettingsRequest) → SettingsResponse` — returns the user's settings
+  as a JSON object string.
+- `UpdateSettings(UpdateSettingsRequest{settings_json}) → SettingsResponse` —
+  merges the given JSON into the user's stored settings.
+
+The confirmation scope lives under `confirmation.require_for` (a list of action
+type names), e.g. `{"confirmation": {"require_for": ["MAKE_CALL", "SEND_MESSAGE"]}}`.
+An empty list means "confirm nothing" (full autonomy); omitting the key uses the
+default (`MAKE_CALL`, `SEND_MESSAGE`).
 
 ## How to add a new action
 
