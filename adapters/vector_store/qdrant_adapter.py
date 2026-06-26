@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 import uuid
@@ -112,13 +113,14 @@ class QdrantAdapter(VectorStorePort):
         await self._ensure_collection(len(vector))
 
         # #2 Dedup: skip storing a near-duplicate within the SAME session.
-        if self.dedup_threshold < 1.0 and self._is_duplicate(vector, metadata.get("user_id")):
+        if self.dedup_threshold < 1.0 and await self._is_duplicate(vector, metadata.get("user_id")):
             logger.info("memory_dedup_skipped user_id=%s", metadata.get("user_id"))
             return
 
         # Deterministic id on content+session so exact repeats collapse on upsert.
         point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, content + str(metadata)))
-        self.client.upsert(
+        await asyncio.to_thread(
+            self.client.upsert,
             collection_name=self.collection_name,
             points=[
                 rest.PointStruct(
@@ -132,28 +134,30 @@ class QdrantAdapter(VectorStorePort):
         # #3 TTL: prune expired memories every `prune_every` stores (throttled).
         self._store_count += 1
         if self.ttl_seconds > 0 and self._store_count % self.prune_every == 0:
-            self._prune_expired()
+            await self._prune_expired()
 
-    def _is_duplicate(self, vector: list[float], session_id: str | None = None) -> bool:
+    async def _is_duplicate(self, vector: list[float], session_id: str | None = None) -> bool:
         # A near-duplicate exists if the closest point in the SAME session clears
         # the dedup threshold.
         try:
-            hits = self.client.query_points(
+            hits = (await asyncio.to_thread(
+                self.client.query_points,
                 collection_name=self.collection_name,
                 query=vector,
                 limit=1,
                 score_threshold=self.dedup_threshold,
                 query_filter=self._session_filter(session_id),
-            ).points
+            )).points
             return bool(hits)
         except Exception:
             return False
 
-    def _prune_expired(self) -> None:
+    async def _prune_expired(self) -> None:
         # Delete memories older than the TTL window.
         cutoff = int(time.time()) - self.ttl_seconds
         try:
-            self.client.delete(
+            await asyncio.to_thread(
+                self.client.delete,
                 collection_name=self.collection_name,
                 points_selector=rest.FilterSelector(
                     filter=rest.Filter(
@@ -185,13 +189,14 @@ class QdrantAdapter(VectorStorePort):
         vector = await self.embedding_port.embed_text(query)
         # Bootstrap the collection to the embedding's real dimension on first use.
         await self._ensure_collection(len(vector))
-        results = self.client.query_points(
+        results = (await asyncio.to_thread(
+            self.client.query_points,
             collection_name=self.collection_name,
             query=vector,
             limit=limit,
             score_threshold=score_threshold,
             query_filter=self._session_filter(session_id),
-        ).points
+        )).points
 
         return [
             MemoryEntry(

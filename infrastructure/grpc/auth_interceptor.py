@@ -1,6 +1,15 @@
+import contextvars
+
 import grpc
 
 from ports.token_service_port import TokenServicePort
+
+# Holds the Principal verified by AuthInterceptor for the current RPC. Set once
+# per request by the interceptor and read by handlers (US-10.2), so the token
+# signature is never verified twice. Defaults to None outside an authorized RPC.
+_principal_var: contextvars.ContextVar = contextvars.ContextVar(
+    "atom_principal", default=None
+)
 
 # RPCs that issue the FIRST token, so they cannot require one. Full method paths
 # include the proto package (com.atom.proto).
@@ -20,16 +29,15 @@ def _bearer_token(metadata) -> str:
     return raw.strip()
 
 
-def principal_from_context(token_service: TokenServicePort | None, context):
-    """Derives the authenticated Principal from the request's Bearer token, or None.
+def principal_from_context():
+    """The Principal verified by AuthInterceptor for the current RPC, or None.
 
-    Used by protected handlers so the user_id comes from the verified token, never
-    from the request body.
+    The interceptor verifies the token signature exactly once per request and
+    stashes the Principal here, so protected handlers read the identity without
+    re-checking the signature (US-10.2). None when auth is disabled or the RPC is
+    public — handlers fall back to their own default in that case.
     """
-    if token_service is None:
-        return None
-    token = _bearer_token(context.invocation_metadata())
-    return token_service.verify_access(token) if token else None
+    return _principal_var.get()
 
 
 class AuthInterceptor(grpc.aio.ServerInterceptor):
@@ -56,10 +64,13 @@ class AuthInterceptor(grpc.aio.ServerInterceptor):
 
         async def _authorize(context):
             token = _bearer_token(context.invocation_metadata())
-            if not token or tokens.verify_access(token) is None:
+            principal = tokens.verify_access(token) if token else None
+            if principal is None:
                 await context.abort(
                     grpc.StatusCode.UNAUTHENTICATED, "missing or invalid access token"
                 )
+            # Stash the verified principal so the handler reads it without re-verifying.
+            _principal_var.set(principal)
 
         if handler.unary_unary is not None:
             async def unary_unary(request, context):

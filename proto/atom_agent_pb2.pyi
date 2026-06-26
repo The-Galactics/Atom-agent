@@ -67,17 +67,19 @@ class ScreenElement(_message.Message):
     def __init__(self, text: _Optional[str] = ..., role: _Optional[str] = ..., clickable: _Optional[bool] = ..., focusable: _Optional[bool] = ..., editable: _Optional[bool] = ..., scrollable: _Optional[bool] = ..., index: _Optional[int] = ...) -> None: ...
 
 class CommandRequest(_message.Message):
-    __slots__ = ("user_id", "command", "screen_elements")
+    __slots__ = ("user_id", "command", "screen_elements", "order_id")
     USER_ID_FIELD_NUMBER: _ClassVar[int]
     COMMAND_FIELD_NUMBER: _ClassVar[int]
     SCREEN_ELEMENTS_FIELD_NUMBER: _ClassVar[int]
+    ORDER_ID_FIELD_NUMBER: _ClassVar[int]
     user_id: str
     command: str
     screen_elements: _containers.RepeatedCompositeFieldContainer[ScreenElement]
-    def __init__(self, user_id: _Optional[str] = ..., command: _Optional[str] = ..., screen_elements: _Optional[_Iterable[_Union[ScreenElement, _Mapping]]] = ...) -> None: ...
+    order_id: str
+    def __init__(self, user_id: _Optional[str] = ..., command: _Optional[str] = ..., screen_elements: _Optional[_Iterable[_Union[ScreenElement, _Mapping]]] = ..., order_id: _Optional[str] = ...) -> None: ...
 
 class CommandResponse(_message.Message):
-    __slots__ = ("success", "out_message", "action_type", "parameters_json", "confidence", "requires_confirmation", "task_complete", "step")
+    __slots__ = ("success", "out_message", "action_type", "parameters_json", "confidence", "requires_confirmation", "task_complete", "step", "awaiting_confirmation")
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
     OUT_MESSAGE_FIELD_NUMBER: _ClassVar[int]
     ACTION_TYPE_FIELD_NUMBER: _ClassVar[int]
@@ -86,6 +88,7 @@ class CommandResponse(_message.Message):
     REQUIRES_CONFIRMATION_FIELD_NUMBER: _ClassVar[int]
     TASK_COMPLETE_FIELD_NUMBER: _ClassVar[int]
     STEP_FIELD_NUMBER: _ClassVar[int]
+    AWAITING_CONFIRMATION_FIELD_NUMBER: _ClassVar[int]
     success: bool
     out_message: str
     action_type: str
@@ -94,7 +97,24 @@ class CommandResponse(_message.Message):
     requires_confirmation: bool
     task_complete: bool
     step: int
-    def __init__(self, success: _Optional[bool] = ..., out_message: _Optional[str] = ..., action_type: _Optional[str] = ..., parameters_json: _Optional[str] = ..., confidence: _Optional[float] = ..., requires_confirmation: _Optional[bool] = ..., task_complete: _Optional[bool] = ..., step: _Optional[int] = ...) -> None: ...
+    awaiting_confirmation: bool
+    def __init__(self, success: _Optional[bool] = ..., out_message: _Optional[str] = ..., action_type: _Optional[str] = ..., parameters_json: _Optional[str] = ..., confidence: _Optional[float] = ..., requires_confirmation: _Optional[bool] = ..., task_complete: _Optional[bool] = ..., step: _Optional[int] = ..., awaiting_confirmation: _Optional[bool] = ...) -> None: ...
+
+class SettingsRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class UpdateSettingsRequest(_message.Message):
+    __slots__ = ("settings_json",)
+    SETTINGS_JSON_FIELD_NUMBER: _ClassVar[int]
+    settings_json: str
+    def __init__(self, settings_json: _Optional[str] = ...) -> None: ...
+
+class SettingsResponse(_message.Message):
+    __slots__ = ("settings_json",)
+    SETTINGS_JSON_FIELD_NUMBER: _ClassVar[int]
+    settings_json: str
+    def __init__(self, settings_json: _Optional[str] = ...) -> None: ...
 
 class MessageRequest(_message.Message):
     __slots__ = ("user_id", "chat_id", "message")

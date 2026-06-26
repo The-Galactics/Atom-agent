@@ -6,7 +6,9 @@ without network or a real Qdrant.
 """
 
 import asyncio
+from unittest.mock import AsyncMock
 
+from application.agents.graph import build_graph
 from application.agents.nodes import GraphNodes
 from domain.conversation.models import ChatMessage
 from domain.memory.models import MemoryEntry
@@ -125,3 +127,24 @@ def test_store_memory_persists_memorable_in_background():
     assert "me llamo Andrés" in content
     assert "Encantado" in content
     assert metadata == {"user_id": "s"}
+
+
+# --- graph message appending ------------------------------------------------
+
+def test_graph_appends_new_messages_to_prior_history():
+    llm = AsyncMock()
+    llm.chat = AsyncMock(return_value=ChatMessage(role="assistant", content="R"))
+    nodes = GraphNodes(llm_port=llm, vector_store_port=AsyncMock(), memory_enabled=False)
+    graph = build_graph(nodes)
+
+    prior = [ChatMessage(role="user", content="m0"),
+             ChatMessage(role="assistant", content="a0")]
+    final = asyncio.run(graph.ainvoke({
+        "session_id": "s1", "input": "hello", "messages": list(prior),
+        "context": "", "response": None,
+    }))
+
+    # Broken "add" reducer overwrites -> len 2 ([user, R]); real reducer appends.
+    assert len(final["messages"]) == 4
+    assert final["messages"][:2] == prior
+    assert final["messages"][-1].content == "R"

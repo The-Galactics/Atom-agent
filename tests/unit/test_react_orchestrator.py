@@ -244,3 +244,135 @@ def test_sessions_are_isolated_by_user_id():
     assert recognizer.calls[1]["history"] is None
     assert len(store.get("u1")) == 1
     assert len(store.get("u2")) == 1
+
+
+def test_concurrent_calls_for_one_session_do_not_duplicate_steps():
+    # A recognizer that yields control mid-call, exposing the TOCTOU window.
+    class SlowRecognizer(IntentRecognizerPort):
+        def __init__(self, results):
+            self._results = list(results)
+            self.calls = []
+        async def recognize(self, text, session_id="default", screen=None, history=None):
+            self.calls.append(history)
+            await asyncio.sleep(0.05)          # force interleaving
+            return self._results.pop(0)
+
+    store = SessionStore()
+    uc = ExecuteCommandUseCase(SlowRecognizer([_open_app(), _tap()]), session_store=store)
+
+    async def scenario():
+        dto = ExecuteCommandInputDTO(text="hi", user_id="u1")
+        return await asyncio.gather(uc.execute(dto), uc.execute(dto))
+
+    a, b = asyncio.run(scenario())
+    # Without the lock both read empty history -> both are step 1 (duplicate).
+    assert sorted([a.step, b.step]) == [1, 2]
+
+
+def test_new_order_id_starts_with_empty_history():
+    store = SessionStore()
+    store.append("u1", "Step 1: OPEN_APP {'app_name': 'youtube'}")
+    uc = ExecuteCommandUseCase(ScriptedRecognizer([_open_app()]), session_store=store)
+
+    out = _run(uc.execute(
+        ExecuteCommandInputDTO(text="otra cosa", user_id="u1", order_id="order-2")
+    ))
+    # The abandoned u1 trace must NOT leak into a fresh order.
+    assert out.step == 1
+
+
+def test_locks_registry_is_bounded():
+    # Drive N distinct order_ids through to task_complete (OPEN_APP then DONE).
+    # After all sessions complete the lock registry must be empty — no leak.
+    N = 5
+    results = []
+    for _ in range(N):
+        results.extend([_open_app(), _done("ok")])
+
+    store = SessionStore()
+    uc = ExecuteCommandUseCase(ScriptedRecognizer(results), session_store=store)
+
+    for i in range(N):
+        order_id = f"order-{i}"
+        _run(uc.execute(ExecuteCommandInputDTO(text="cmd", user_id="u", order_id=order_id)))
+        _run(uc.execute(ExecuteCommandInputDTO(text="cmd", user_id="u", order_id=order_id)))
+
+    assert len(uc._locks) == 0
+
+
+# --- Conversational confirmation -------------------------------------------
+
+def _make_call(target="mamá"):
+    return IntentResult(
+        action=Action(type=ActionType.MAKE_CALL, parameters={"target": target}),
+        reply="",
+        confidence=1.0,
+        requires_confirmation=True,
+    )
+
+
+def test_sensitive_action_held_then_confirmed_with_yes():
+    store = SessionStore()
+    recognizer = ScriptedRecognizer([_make_call()])
+    uc = ExecuteCommandUseCase(intent_recognizer=recognizer, session_store=store)
+
+    ask = _run(uc.execute(ExecuteCommandInputDTO(text="llama a mamá", order_id="o1")))
+    assert ask.action_type == "NONE"
+    assert ask.task_complete is False
+    assert "?" in ask.reply_text
+    assert store.get("o1") == []  # proposal not recorded until confirmed
+
+    # The recognizer is NOT consulted on the "sí" turn (script is now empty).
+    run = _run(uc.execute(ExecuteCommandInputDTO(text="sí, dale", order_id="o1")))
+    assert run.action_type == "MAKE_CALL"
+    assert run.requires_confirmation is False
+    assert store.get("o1") == ["Step 1: MAKE_CALL {'target': 'mamá'}"]
+    assert len(recognizer.calls) == 1
+
+
+def test_configurable_empty_set_skips_confirmation():
+    recognizer = ScriptedRecognizer([_make_call()])
+    uc = ExecuteCommandUseCase(intent_recognizer=recognizer, session_store=SessionStore())
+
+    out = _run(uc.execute(
+        ExecuteCommandInputDTO(text="llama a mamá", order_id="o1", confirm_actions=frozenset())
+    ))
+    assert out.action_type == "MAKE_CALL"  # executed directly, no question
+
+
+def test_configurable_can_require_confirmation_for_open_app():
+    recognizer = ScriptedRecognizer([_open_app()])
+    uc = ExecuteCommandUseCase(intent_recognizer=recognizer, session_store=SessionStore())
+
+    out = _run(uc.execute(
+        ExecuteCommandInputDTO(text="abre youtube", order_id="o1", confirm_actions=frozenset({"OPEN_APP"}))
+    ))
+    assert out.action_type == "NONE"  # now held for confirmation
+    assert "?" in out.reply_text
+
+
+def test_unclear_replies_reask_then_auto_cancel():
+    store = SessionStore()
+    recognizer = ScriptedRecognizer([_make_call()])
+    uc = ExecuteCommandUseCase(intent_recognizer=recognizer, session_store=store)
+
+    _run(uc.execute(ExecuteCommandInputDTO(text="llama a mamá", order_id="o1")))
+    r1 = _run(uc.execute(ExecuteCommandInputDTO(text="ehh", order_id="o1")))
+    assert r1.action_type == "NONE" and r1.task_complete is False  # re-ask 1
+    r2 = _run(uc.execute(ExecuteCommandInputDTO(text="no sé", order_id="o1")))
+    assert r2.task_complete is False  # re-ask 2
+    r3 = _run(uc.execute(ExecuteCommandInputDTO(text="mmm", order_id="o1")))
+    assert r3.action_type == "NONE" and r3.task_complete is True  # gave up
+    assert store.get_pending("o1") is None
+
+
+def test_orders_are_isolated_by_order_id():
+    store = SessionStore()
+    recognizer = ScriptedRecognizer([_open_app("youtube"), _open_app("spotify")])
+    uc = ExecuteCommandUseCase(intent_recognizer=recognizer, session_store=store)
+
+    _run(uc.execute(ExecuteCommandInputDTO(text="abre youtube", order_id="oA")))
+    _run(uc.execute(ExecuteCommandInputDTO(text="abre spotify", order_id="oB")))
+
+    assert store.get("oA") == ["Step 1: OPEN_APP {'app_name': 'youtube'}"]
+    assert store.get("oB") == ["Step 1: OPEN_APP {'app_name': 'spotify'}"]

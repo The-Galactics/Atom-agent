@@ -27,13 +27,15 @@ class Settings(BaseSettings):
 
     # Sprint 2/3: LLM & Memory
     google_api_key: str | None = Field(None, env="GOOGLE_API_KEY")
-    # gemini-3.1-flash-lite is cheaper and exposes the native google_search tool.
-    llm_model: str = Field("gemini-3.1-flash-lite", env="LLM_MODEL")
+    # gemini-3.1-flash is a verified, deployable model id. A missing LLM_MODEL
+    # override must still boot against a real model (see startup probe).
+    llm_model: str = Field("models/gemini-3.1-flash-lite", env="LLM_MODEL")
     # IANA timezone used to tell the model the current date/time (see
     # domain/datetime_context). Default: Colombia.
     assistant_timezone: str = Field("America/Bogota", env="ASSISTANT_TIMEZONE")
     # When True, conversational answers are grounded with Google Search so the
-    # model can use live web information. Requires a Gemini 2.x model.
+    # model can use live web information. Requires a Gemini model that supports
+    # the native google_search tool (Gemini 2.x or newer, e.g. 3.1).
     web_search_enabled: bool = Field(True, env="WEB_SEARCH_ENABLED")
     qdrant_url: str = Field("http://localhost:6333", env="QDRANT_URL")
     qdrant_api_key: str | None = Field(None, env="QDRANT_API_KEY")
@@ -123,6 +125,18 @@ class Settings(BaseSettings):
     # falls back to an INSECURE port (development only).
     tls_cert_path: str | None = Field(None, env="TLS_CERT_PATH")
     tls_key_path: str | None = Field(None, env="TLS_KEY_PATH")
+
+    # --- Hardening (Fase 2A) ---
+    # gRPC transport limits (2A.2): cap message size and bound concurrency so a
+    # single oversized/abusive client cannot exhaust memory or worker slots.
+    grpc_max_message_bytes: int = Field(8 * 1024 * 1024, env="GRPC_MAX_MESSAGE_BYTES")
+    grpc_max_concurrent_rpcs: int = Field(64, env="GRPC_MAX_CONCURRENT_RPCS")
+    # NOTE: per-RPC handler timeouts (2A.2) are deferred to the gRPC hardening HU
+    # (they need each handler wrapped in asyncio.wait_for; no native gRPC option).
+    # HTTP hardening (2A.3): per-request body cap + per-client sliding-window rate limit.
+    http_max_body_bytes: int = Field(1 * 1024 * 1024, env="HTTP_MAX_BODY_BYTES")
+    rate_limit_max_requests: int = Field(120, env="RATE_LIMIT_MAX_REQUESTS")
+    rate_limit_window_seconds: float = Field(60.0, env="RATE_LIMIT_WINDOW_SECONDS")
 
     class Config:
         env_file = ".env"
