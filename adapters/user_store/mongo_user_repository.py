@@ -18,15 +18,20 @@ class MongoUserRepository(UserRepositoryPort):
 
     async def ensure_indexes(self) -> None:
         await self._col.create_index("email", unique=True)
-        await self._col.create_index("google_sub", unique=True, sparse=True)
+        # partialFilterExpression (not sparse) so multiple email-only users —
+        # which have no google_sub — don't collide on a present null key.
+        await self._col.create_index(
+            "google_sub",
+            unique=True,
+            partialFilterExpression={"google_sub": {"$type": "string"}},
+        )
 
     @staticmethod
     def _to_doc(user: User) -> dict:
-        return {
+        doc = {
             "_id": user.id,
             "email": user.email,
             "password_hash": user.password_hash,
-            "google_sub": user.google_sub,
             "auth_providers": user.auth_providers,
             "display_name": user.display_name,
             "active": user.active,
@@ -34,6 +39,11 @@ class MongoUserRepository(UserRepositoryPort):
             "created_at": user.created_at,
             "updated_at": user.updated_at,
         }
+        # Only persist google_sub when set, so the partial unique index ignores
+        # email-only accounts entirely.
+        if user.google_sub is not None:
+            doc["google_sub"] = user.google_sub
+        return doc
 
     @staticmethod
     def _to_domain(doc: dict) -> User:

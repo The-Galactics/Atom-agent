@@ -62,3 +62,32 @@ def test_duplicate_email_raises():
     asyncio.run(repo.save(User.new("a@b.com", "hash:x")))
     with pytest.raises(UserAlreadyExistsError):
         asyncio.run(repo.save(User.new("a@b.com", "hash:y")))
+
+
+def test_to_doc_omits_google_sub_when_none():
+    # An email-only user must NOT write google_sub:null, or the second such
+    # user collides on the sparse unique index (DuplicateKeyError).
+    user = User.new("solo@b.com", "hash:x", "Solo")
+    doc = MongoUserRepository._to_doc(user)
+    assert "google_sub" not in doc
+
+
+def test_ensure_indexes_uses_partial_filter_for_google_sub():
+    calls = []
+
+    class _Col:
+        async def create_index(self, key, **kwargs):
+            calls.append((key, kwargs))
+
+    class _Client:
+        def __getitem__(self, _):
+            class _DB:
+                def __getitem__(self, _):
+                    return _Col()
+            return _DB()
+
+    repo = MongoUserRepository(_Client(), "atom_test")
+    asyncio.run(repo.ensure_indexes())
+    gsub = [kw for key, kw in calls if key == "google_sub"][0]
+    assert gsub.get("partialFilterExpression") == {"google_sub": {"$type": "string"}}
+    assert "sparse" not in gsub
