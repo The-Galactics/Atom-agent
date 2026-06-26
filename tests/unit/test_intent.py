@@ -165,6 +165,7 @@ def test_execute_command_sensitive_action_asks_then_executes_on_yes():
     assert ask.action_type == "NONE"  # held, not executed
     assert ask.requires_confirmation is False  # client must NOT pop a dialog
     assert ask.task_complete is False
+    assert ask.awaiting_confirmation is True  # signals the client to capture sí/no
     assert "mamá" in ask.reply_text and "?" in ask.reply_text  # spoken question
 
     run = asyncio.run(

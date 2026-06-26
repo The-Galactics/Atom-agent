@@ -79,7 +79,7 @@ class CommandRequest(_message.Message):
     def __init__(self, user_id: _Optional[str] = ..., command: _Optional[str] = ..., screen_elements: _Optional[_Iterable[_Union[ScreenElement, _Mapping]]] = ..., order_id: _Optional[str] = ...) -> None: ...
 
 class CommandResponse(_message.Message):
-    __slots__ = ("success", "out_message", "action_type", "parameters_json", "confidence", "requires_confirmation", "task_complete", "step")
+    __slots__ = ("success", "out_message", "action_type", "parameters_json", "confidence", "requires_confirmation", "task_complete", "step", "awaiting_confirmation")
     SUCCESS_FIELD_NUMBER: _ClassVar[int]
     OUT_MESSAGE_FIELD_NUMBER: _ClassVar[int]
     ACTION_TYPE_FIELD_NUMBER: _ClassVar[int]
@@ -88,6 +88,7 @@ class CommandResponse(_message.Message):
     REQUIRES_CONFIRMATION_FIELD_NUMBER: _ClassVar[int]
     TASK_COMPLETE_FIELD_NUMBER: _ClassVar[int]
     STEP_FIELD_NUMBER: _ClassVar[int]
+    AWAITING_CONFIRMATION_FIELD_NUMBER: _ClassVar[int]
     success: bool
     out_message: str
     action_type: str
@@ -96,7 +97,8 @@ class CommandResponse(_message.Message):
     requires_confirmation: bool
     task_complete: bool
     step: int
-    def __init__(self, success: _Optional[bool] = ..., out_message: _Optional[str] = ..., action_type: _Optional[str] = ..., parameters_json: _Optional[str] = ..., confidence: _Optional[float] = ..., requires_confirmation: _Optional[bool] = ..., task_complete: _Optional[bool] = ..., step: _Optional[int] = ...) -> None: ...
+    awaiting_confirmation: bool
+    def __init__(self, success: _Optional[bool] = ..., out_message: _Optional[str] = ..., action_type: _Optional[str] = ..., parameters_json: _Optional[str] = ..., confidence: _Optional[float] = ..., requires_confirmation: _Optional[bool] = ..., task_complete: _Optional[bool] = ..., step: _Optional[int] = ..., awaiting_confirmation: _Optional[bool] = ...) -> None: ...
 
 class SettingsRequest(_message.Message):
     __slots__ = ()
