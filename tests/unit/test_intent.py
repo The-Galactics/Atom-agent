@@ -145,7 +145,10 @@ def test_execute_command_maps_recognized_action():
     assert recognizer.last_session == "u1"
 
 
-def test_execute_command_sensitive_action_requires_confirmation():
+def test_execute_command_sensitive_action_asks_then_executes_on_yes():
+    # Conversational confirmation: a sensitive action is NOT executed on the spot;
+    # the agent asks out loud (action_type NONE + a spoken question) and only runs
+    # it after the user's "sí" on the next turn (same order/session).
     recognizer = FakeIntentRecognizer(
         IntentResult(
             action=Action(type=ActionType.MAKE_CALL, parameters={"target": "mamá"}),
@@ -156,12 +159,38 @@ def test_execute_command_sensitive_action_requires_confirmation():
     )
     use_case = ExecuteCommandUseCase(intent_recognizer=recognizer)
 
-    output = asyncio.run(use_case.execute(ExecuteCommandInputDTO(text="llama a mamá")))
+    ask = asyncio.run(
+        use_case.execute(ExecuteCommandInputDTO(text="llama a mamá", order_id="o1"))
+    )
+    assert ask.action_type == "NONE"  # held, not executed
+    assert ask.requires_confirmation is False  # client must NOT pop a dialog
+    assert ask.task_complete is False
+    assert "mamá" in ask.reply_text and "?" in ask.reply_text  # spoken question
 
-    assert output.action_type == "MAKE_CALL"
-    assert output.requires_confirmation is True
-    # Bare tool call without text gets a default spoken confirmation.
-    assert output.reply_text == "De acuerdo."
+    run = asyncio.run(
+        use_case.execute(ExecuteCommandInputDTO(text="sí", order_id="o1"))
+    )
+    assert run.action_type == "MAKE_CALL"
+    assert run.parameters == {"target": "mamá"}
+    assert run.requires_confirmation is False
+
+
+def test_execute_command_sensitive_action_cancelled_on_no():
+    recognizer = FakeIntentRecognizer(
+        IntentResult(
+            action=Action(type=ActionType.MAKE_CALL, parameters={"target": "mamá"}),
+            reply="",
+            confidence=1.0,
+            requires_confirmation=True,
+        )
+    )
+    use_case = ExecuteCommandUseCase(intent_recognizer=recognizer)
+
+    asyncio.run(use_case.execute(ExecuteCommandInputDTO(text="llama a mamá", order_id="o1")))
+    cancel = asyncio.run(use_case.execute(ExecuteCommandInputDTO(text="no", order_id="o1")))
+
+    assert cancel.action_type == "NONE"
+    assert cancel.task_complete is True
 
 
 def test_execute_command_forwards_screen_to_recognizer():

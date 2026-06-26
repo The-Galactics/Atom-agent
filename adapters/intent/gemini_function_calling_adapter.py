@@ -6,7 +6,7 @@ from adapters.llm.content import extract_text
 from application.agents.prompts.intent_prompt import INTENT_SYSTEM_PROMPT
 from domain.datetime_context import current_datetime_sentence
 from domain.errors import ProviderError
-from domain.intent.catalog import openai_tools, spec_for_tool
+from domain.intent.catalog import openai_tools, spec_for_tool, validate_and_coerce_args
 from domain.intent.models import Action, ActionType, IntentResult
 from ports.intent_port import IntentRecognizerPort
 
@@ -146,8 +146,25 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
         if spec.type is ActionType.TYPE_TEXT and "submit" not in args:
             args["submit"] = True
 
+        # The tool layer is untrusted: validate/coerce args against the spec
+        # before building the action. On a hard error (missing required slot,
+        # enum/type violation) degrade to a conversational turn rather than
+        # emitting a malformed action to the client.
+        coerced, errors = validate_and_coerce_args(spec, args)
+        if errors:
+            logger.warning(
+                "intent_arg_validation_failed session_id=%s tool=%s errors=%s",
+                session_id, tool_name, errors,
+            )
+            return IntentResult(
+                action=Action(type=ActionType.NONE),
+                reply="No pude completar esa acción, ¿puedes reformularla?",
+                confidence=0.0,
+                raw_text=text,
+            )
+
         return IntentResult(
-            action=Action(type=spec.type, parameters=args),
+            action=Action(type=spec.type, parameters=coerced),
             reply=extract_text(response.content),
             confidence=1.0,
             requires_confirmation=spec.requires_confirmation,
