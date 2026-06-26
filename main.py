@@ -4,10 +4,12 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response
 
 from api.controllers import create_voice_router, create_chat_router
+from api.middleware import add_hardening_middleware
 from infrastructure.config import get_settings
 from infrastructure.container import build_container
 from infrastructure.logging import configure_logging, request_logging_middleware
 from infrastructure.grpc.server import serve as start_grpc_server
+from infrastructure.rate_limit import SlidingWindowRateLimiter
 
 
 # Configure global logging before app startup.
@@ -51,8 +53,34 @@ async def lifespan(app: FastAPI):
             app.state.voice_container.shutdown()
 
 
-app = FastAPI(title="Atom Agent", version="0.2.0", lifespan=lifespan)
+def docs_settings(app_env: str) -> dict:
+    """FastAPI doc-exposure flags by environment (Fase 2A.7).
+
+    In production (or its ``prod`` alias) the interactive docs and the OpenAPI
+    schema are turned off so the API surface is not advertised; enabled elsewhere.
+    """
+    if app_env.lower() in ("production", "prod"):
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {"docs_url": "/docs", "redoc_url": "/redoc", "openapi_url": "/openapi.json"}
+
+
+_settings = get_settings()
+app = FastAPI(
+    title="Atom Agent",
+    version="0.2.0",
+    lifespan=lifespan,
+    **docs_settings(_settings.app_env),
+)
 app.middleware("http")(request_logging_middleware)
+# Body-size cap (413) + per-client rate limit (429) before any handler runs.
+add_hardening_middleware(
+    app,
+    max_body_bytes=_settings.http_max_body_bytes,
+    limiter=SlidingWindowRateLimiter(
+        _settings.rate_limit_max_requests,
+        _settings.rate_limit_window_seconds,
+    ),
+)
 
 
 @app.get("/health")

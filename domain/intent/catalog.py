@@ -225,3 +225,59 @@ def spec_for_type(action_type: ActionType) -> ActionSpec | None:
 def openai_tools() -> list[dict]:
     """All actions as OpenAI-style tool definitions for ``bind_tools``."""
     return [spec.to_openai_tool() for spec in ACTION_CATALOG]
+
+
+_TRUE_STRINGS = {"true", "1", "yes", "on"}
+_FALSE_STRINGS = {"false", "0", "no", "off"}
+
+
+def validate_and_coerce_args(
+    spec: ActionSpec, args: dict
+) -> tuple[dict, list[str]]:
+    """Validate ``args`` against an action's ``ParameterSpec``s (Fase 2A.5).
+
+    Returns ``(coerced, errors)``: the LLM/tool layer is untrusted, so missing
+    required params, enum violations and bad types are reported instead of being
+    passed through. Type-coerces integer/boolean params from their string forms
+    (the function-calling layer often hands everything back as strings).
+    """
+    coerced: dict = {}
+    errors: list[str] = []
+    provided = args or {}
+
+    for param in spec.parameters:
+        if param.name not in provided:
+            if param.required:
+                errors.append(f"missing required parameter: {param.name}")
+            continue
+
+        value = provided[param.name]
+
+        if param.type == "integer":
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                errors.append(f"{param.name} must be an integer")
+                continue
+        elif param.type == "boolean":
+            if isinstance(value, bool):
+                pass
+            elif isinstance(value, str) and value.strip().lower() in _TRUE_STRINGS:
+                value = True
+            elif isinstance(value, str) and value.strip().lower() in _FALSE_STRINGS:
+                value = False
+            else:
+                errors.append(f"{param.name} must be a boolean")
+                continue
+        else:  # "string"
+            value = str(value)
+
+        if param.enum is not None and value not in param.enum:
+            errors.append(
+                f"{param.name} must be one of {param.enum}, got {value!r}"
+            )
+            continue
+
+        coerced[param.name] = value
+
+    return coerced, errors
