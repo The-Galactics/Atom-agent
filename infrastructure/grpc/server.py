@@ -18,6 +18,7 @@ from domain.errors import (
     UserAlreadyExistsError,
 )
 from infrastructure.grpc.auth_interceptor import AuthInterceptor, principal_from_context
+from infrastructure.grpc.error_interceptor import ErrorInterceptor
 
 logger = logging.getLogger("voice_module")
 
@@ -54,8 +55,10 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
     async def Register(self, request, context):
         use_case = self.container.register_use_case
         if use_case is None:
+            logger.warning("grpc auth unavailable peer=%s status=%s",
+                           context.peer(), self.container.auth_status)
             await context.abort(grpc.StatusCode.UNAVAILABLE,
-                                f"auth unavailable: {self.container.auth_status}")
+                                "Authentication service is temporarily unavailable")
             return
         try:
             pair = await use_case.execute(request.email, request.password, request.display_name)
@@ -70,8 +73,10 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
     async def Login(self, request, context):
         use_case = self.container.authenticate_use_case
         if use_case is None:
+            logger.warning("grpc auth unavailable peer=%s status=%s",
+                           context.peer(), self.container.auth_status)
             await context.abort(grpc.StatusCode.UNAVAILABLE,
-                                f"auth unavailable: {self.container.auth_status}")
+                                "Authentication service is temporarily unavailable")
             return
         try:
             pair = await use_case.execute(request.email, request.password)
@@ -96,8 +101,10 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
     async def RefreshToken(self, request, context):
         use_case = self.container.refresh_session_use_case
         if use_case is None:
+            logger.warning("grpc auth unavailable peer=%s status=%s",
+                           context.peer(), self.container.auth_status)
             await context.abort(grpc.StatusCode.UNAVAILABLE,
-                                f"auth unavailable: {self.container.auth_status}")
+                                "Authentication service is temporarily unavailable")
             return
         try:
             pair = await use_case.execute(request.refresh_token)
@@ -115,26 +122,25 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
         use_case = self.container.execute_command_use_case
         if use_case is None:
             detail = getattr(self.container, "intent_status", "intent provider unavailable")
+            # Internal status to logs only; the client gets a generic message.
+            logger.warning("grpc_ExecuteCommand unavailable peer=%s status=%s", context.peer(), detail)
             await context.abort(
                 grpc.StatusCode.UNAVAILABLE,
-                f"Intent provider unavailable: {detail}",
+                "Command service is temporarily unavailable",
             )
             return
 
-        try:
-            # Identity comes from the verified token, NOT request.user_id (deprecated).
-            principal = principal_from_context(getattr(self.container, "token_service", None), context)
-            user_id = principal.user_id if principal else request.user_id
-            input_dto = ExecuteCommandInputDTO(
-                text=request.command,
-                user_id=user_id,
-                screen_elements=[_to_screen(e) for e in request.screen_elements],
-            )
-            output = await use_case.execute(input_dto)
-        except Exception as exc:
-            logger.exception("grpc_ExecuteCommand failed peer=%s", context.peer())
-            await context.abort(grpc.StatusCode.INTERNAL, f"command failed: {exc}")
-            return
+        # Identity comes from the verified token, NOT request.user_id (deprecated).
+        principal = principal_from_context(getattr(self.container, "token_service", None), context)
+        user_id = principal.user_id if principal else request.user_id
+        input_dto = ExecuteCommandInputDTO(
+            text=request.command,
+            user_id=user_id,
+            screen_elements=[_to_screen(e) for e in request.screen_elements],
+        )
+        # Unhandled errors propagate to the global ErrorInterceptor, which logs the
+        # real cause server-side and returns a generic INTERNAL (US-10.1).
+        output = await use_case.execute(input_dto)
 
         logger.info(
             "grpc_ExecuteCommand ok peer=%s action=%s confidence=%.2f step=%d complete=%s",
@@ -160,22 +166,23 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
         )
         use_case = self.container.chat_use_case
         if use_case is None:
-            logger.warning("grpc_StreamChat unavailable peer=%s", context.peer())
+            # Internal status to logs only; the client gets a generic message.
+            logger.warning(
+                "grpc_StreamChat unavailable peer=%s status=%s",
+                context.peer(), self.container.llm_status,
+            )
             await context.abort(
                 grpc.StatusCode.UNAVAILABLE,
-                f"LLM provider unavailable: {self.container.llm_status}",
+                "Chat service is temporarily unavailable",
             )
             return
-        try:
-            # Identity comes from the verified token, NOT request.user_id (deprecated).
-            principal = principal_from_context(getattr(self.container, "token_service", None), context)
-            session_id = principal.user_id if principal else request.user_id
-            input_dto = ChatInputDTO(text=request.message, session_id=session_id)
-            output = await use_case.execute(input_dto)
-        except Exception as exc:
-            logger.exception("grpc_StreamChat failed peer=%s", context.peer())
-            await context.abort(grpc.StatusCode.INTERNAL, f"chat failed: {exc}")
-            return
+
+        # Identity comes from the verified token, NOT request.user_id (deprecated).
+        principal = principal_from_context(getattr(self.container, "token_service", None), context)
+        session_id = principal.user_id if principal else request.user_id
+        input_dto = ChatInputDTO(text=request.message, session_id=session_id)
+        # Unhandled errors propagate to the global ErrorInterceptor (US-10.1).
+        output = await use_case.execute(input_dto)
 
         logger.info("grpc_StreamChat ok peer=%s chars=%d", context.peer(), len(output.text))
         yield pb2.MessageResponse(
@@ -189,9 +196,10 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
         use_case = self.container.transcribe_use_case
         if use_case is None:
             detail = getattr(self.container, "voice_status", "voice provider unavailable")
+            logger.warning("grpc_Transcribe unavailable peer=%s status=%s", context.peer(), detail)
             await context.abort(
                 grpc.StatusCode.UNAVAILABLE,
-                f"Voice provider unavailable (STT): {detail}",
+                "Voice service is temporarily unavailable",
             )
             return
 
@@ -217,9 +225,10 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
         use_case = self.container.synthesize_use_case
         if use_case is None:
             detail = getattr(self.container, "voice_status", "voice provider unavailable")
+            logger.warning("grpc_Synthesize unavailable peer=%s status=%s", context.peer(), detail)
             await context.abort(
                 grpc.StatusCode.UNAVAILABLE,
-                f"Voice provider unavailable (TTS): {detail}",
+                "Voice service is temporarily unavailable",
             )
             return
 
@@ -259,8 +268,10 @@ async def serve(container, port: int = 50051):
     settings = container.settings
     # Enforce auth on protected RPCs (public auth RPCs pass through); cap message
     # size and concurrency so one client cannot exhaust memory or worker slots.
+    # ErrorInterceptor is outermost so it also sanitizes anything that escapes the
+    # auth interceptor or the handlers into a generic INTERNAL (US-10.1).
     server = grpc.aio.server(
-        interceptors=[AuthInterceptor(container.token_service)],
+        interceptors=[ErrorInterceptor(), AuthInterceptor(container.token_service)],
         options=grpc_server_options(settings),
         maximum_concurrent_rpcs=grpc_max_concurrent_rpcs(settings),
     )
