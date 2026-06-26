@@ -3,6 +3,7 @@ import logging
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from adapters.llm.content import extract_text
+from application.agents.prompts.intent_prompt import INTENT_SYSTEM_PROMPT
 from domain.datetime_context import current_datetime_sentence
 from domain.errors import ProviderError
 from domain.intent.catalog import openai_tools, spec_for_tool
@@ -11,58 +12,8 @@ from ports.intent_port import IntentRecognizerPort
 
 logger = logging.getLogger("voice_module")
 
-_SYSTEM_PROMPT = (
-    "Eres Atom, un asistente de Android. SÍ puedes ver la pantalla actual: cuando "
-    "hay elementos visibles, se te proporcionan en el mensaje como una lista. "
-    "Nunca digas que no puedes ver la pantalla. "
-    "REGLA OBLIGATORIA: cuando el usuario pida LEER, OÍR o SABER QUÉ HAY en la "
-    "pantalla (por ejemplo 'lee la pantalla', 'léeme la pantalla', 'qué hay en la "
-    "pantalla', 'qué ves', 'qué pone', 'descríbeme la pantalla'), DEBES llamar a la "
-    "herramienta 'read_screen' SIEMPRE; nunca respondas con texto ni leas los "
-    "elementos tú mismo desde el contexto, aunque ya veas la lista de elementos. "
-    "Cuando el usuario quiera pulsar, abrir o interactuar con un elemento concreto, "
-    "usa 'tap_element' con el texto visible exacto del elemento. "
-    "Para introducir texto en un campo de búsqueda o editable (por ejemplo escribir "
-    "una consulta), LLAMA a 'type_text' con el texto a escribir; usa 'submit: true' "
-    "para ejecutar la búsqueda. No intentes teclear pulsando elementos. Pulsa el "
-    "campo primero con 'tap_element' solo si todavía no está enfocado. "
-    "Para cualquier otra orden que se corresponda con una de tus herramientas, llama "
-    "a esa herramienta con los parámetros adecuados en lugar de responder con texto. "
-    "REGLA DE BARRAS DE BÚSQUEDA FALSAS (E-commerce): Si identificas una barra de "
-    "búsqueda en la pantalla inicial (ej. Amazon) pero el mapa de nodos indica que el "
-    "elemento NO es editable (es decir, su línea NO incluye el flag 'editable'; "
-    "is_editable == False), el modelo tiene PROHIBIDO llamar a 'type_text' directamente "
-    "sobre ese contenedor. Debes emitir obligatoriamente un 'tap_element' previo sobre "
-    "ese contenedor visual para forzar a la aplicación a abrir la verdadera pantalla de "
-    "captura de texto. Podrás escribir el texto con 'type_text' únicamente en el turno "
-    "inmediato siguiente. "
-    "REGLA DE PRIORIDAD DE MENSAJERÍA: Cuando el usuario solicite enviar un "
-    "mensaje (ej. 'escríbele a Juan', 'mándale un mensaje a mi hermano'), tienes "
-    "PROHIBIDO usar la aplicación nativa de SMS (Mensajes). Debes llamar UNA sola "
-    "vez a la herramienta `send_message` con el parámetro `app='whatsapp'` (o "
-    "`app='telegram'` si el usuario lo pide expresamente). Usa `app='sms'` SOLO si "
-    "el usuario pide explícitamente un SMS. NUNCA ejecutes además un `OPEN_APP` "
-    "para abrir la app de mensajería: una sola llamada a `send_message` con el "
-    "parámetro `app` correcto es suficiente. "
-    "FALLBACK DE BÚSQUEDA EN WHATSAPP: Tras intentar enviar un mensaje con "
-    "`send_message`, si en el SIGUIENTE turno la pantalla muestra la pantalla de "
-    "inicio o la LISTA DE CHATS de WhatsApp (un campo de búsqueda y varias filas de "
-    "chat) en lugar de una conversación abierta con su caja de texto, significa que "
-    "el contacto no se pudo abrir (no está en la agenda o sin número internacional "
-    "válido). WhatsApp YA estará abierto en ese turno (lo abre la app cliente "
-    "automáticamente), así que NUNCA emitas OPEN_APP para abrir WhatsApp: recupérate "
-    "únicamente con `tap_element` y `type_text` sobre la pantalla ya visible, en "
-    "coherencia con la regla anterior. NO abortes el bucle ReAct: cambia de "
-    "estrategia. Pulsa el icono de la "
-    "lupa/buscar con `tap_element`, escribe el nombre del contacto con `type_text` "
-    "(submit: false), selecciona la FILA del chat correspondiente en los resultados "
-    "con `tap_element` (la fila del chat, nunca la foto de perfil), escribe el cuerpo "
-    "del mensaje con `type_text` y envíalo. Cuando la conversación esté abierta y el "
-    "mensaje enviado, termina la tarea. "
-    "Solo si el mensaje es conversación genuina (saludos, charla) y no pide una "
-    "acción ni leer la pantalla, responde con naturalidad en español sin llamar "
-    "ninguna herramienta."
-)
+# Back-compat alias: existing imports of _SYSTEM_PROMPT keep working.
+_SYSTEM_PROMPT = INTENT_SYSTEM_PROMPT
 
 # Cap rendered elements to bound prompt tokens.
 _MAX_SCREEN_LINES = 80
@@ -132,7 +83,7 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
     """
 
     def __init__(self, api_key: str, model: str = "gemini-3.1-flash",
-                timezone: str = "America/Bogota"):
+                timezone: str = "America/Bogota", system_prompt: str | None = None):
         llm = ChatGoogleGenerativeAI(
             model=model,
             google_api_key=api_key,
@@ -141,13 +92,14 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
         # Bind once; the bound model is reused for every recognition call.
         self._llm = llm.bind_tools(openai_tools())
         self._timezone = timezone
+        self._system_prompt = system_prompt or INTENT_SYSTEM_PROMPT
 
     async def recognize(
         self, text: str, session_id: str = "default", screen=None, history=None
     ) -> IntentResult:
         # Prepend the real current date/time so the model answers date/day/time
         # questions with the present instead of a training-time guess.
-        system_prompt = f"{current_datetime_sentence(self._timezone)}\n\n{_SYSTEM_PROMPT}"
+        system_prompt = f"{current_datetime_sentence(self._timezone)}\n\n{self._system_prompt}"
         messages = [("system", system_prompt), ("human", text)]
         if history:
             # Feed the accumulated ReAct trace so the model emits the next step.

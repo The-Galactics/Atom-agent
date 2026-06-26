@@ -89,3 +89,20 @@ def test_recognize_injects_current_date_into_system_prompt():
     role, text = messages[0]
     assert role == "system"
     assert "Fecha y hora actuales" in text
+
+
+def test_system_prompt_is_unchanged_after_extraction():
+    from application.agents.prompts.intent_prompt import INTENT_SYSTEM_PROMPT
+    import adapters.intent.gemini_function_calling_adapter as mod
+    # The adapter's prompt and the extracted module must be the same text.
+    assert mod._SYSTEM_PROMPT == INTENT_SYSTEM_PROMPT
+
+
+def test_injected_system_prompt_is_used_in_recognition():
+    resp = _resp(tool_calls=[], content="hola")
+    adapter, fake_bound = _make_adapter(response=resp)
+    asyncio.run(adapter.recognize("hola"))
+    sent = fake_bound.ainvoke.call_args.args[0]
+    system_text = sent[0][1]  # ("system", "<datetime>\n\n<prompt>")
+    from application.agents.prompts.intent_prompt import INTENT_SYSTEM_PROMPT
+    assert INTENT_SYSTEM_PROMPT in system_text

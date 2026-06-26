@@ -216,11 +216,13 @@ def _build_intent_use_case(settings: Settings, embedding_adapter: Optional[Embed
         from adapters.intent.gemini_function_calling_adapter import (
             GeminiFunctionCallingAdapter,
         )
+        from application.agents.prompts.intent_prompt import INTENT_SYSTEM_PROMPT
 
         recognizer: IntentRecognizerPort = GeminiFunctionCallingAdapter(
             api_key=settings.google_api_key,
             model=settings.llm_model,
             timezone=settings.assistant_timezone,
+            system_prompt=INTENT_SYSTEM_PROMPT,
         )
 
         # Action cache: a separate Qdrant collection keyed by command text.
