@@ -16,15 +16,20 @@ Verdict = Literal["yes", "no", "unclear"]
 
 # Affirmative / negative tokens, accent-stripped and lowercased (see _normalize).
 _YES = frozenset({
-    "si", "sip", "claro", "vale", "dale", "ok", "okay", "oka", "correcto",
-    "adelante", "hazlo", "hagalo", "confirmo", "confirmar", "perfecto", "eso",
-    "exacto", "afirmativo", "procede", "continua", "acepto", "bueno",
-    "yes", "yeah", "yep", "yup", "sure", "okey", "confirm", "confirmed",
+    "si", "sip", "sii", "claro", "vale", "dale", "ok", "okay", "oka", "okey",
+    "oki", "okis", "correcto", "adelante", "hazlo", "hagalo", "hagale",
+    "confirmo", "confirmar", "confirma", "confirmado", "perfecto", "eso",
+    "exacto", "afirmativo", "procede", "continua", "acepto", "aceptar",
+    "bueno", "listo", "seguro", "obvio", "ya", "va", "entendido", "simon",
+    "sisas",
+    "yes", "yeah", "yep", "yup", "sure", "confirm", "confirmed",
     "proceed", "affirmative", "correct",
 })
 _NO = frozenset({
-    "no", "nop", "nope", "cancela", "cancelar", "para", "parar", "detente",
-    "detener", "alto", "negativo", "nunca", "rechazo", "rechazar", "olvidalo",
+    "no", "nop", "nope", "cancela", "cancelo", "cancelar", "cancelado",
+    "concelo", "concela", "para", "parar", "detente", "detener", "alto",
+    "negativo", "nunca", "jamas", "rechazo", "rechazar", "olvidalo",
+    "olvida", "nada", "nel", "nones", "tampoco",
     "cancel", "stop", "dont", "nevermind", "abort", "negative", "deny",
 })
 # Uncertainty phrases — evaluated FIRST so e.g. "no sé" (I don't know) isn't
@@ -35,8 +40,16 @@ _UNCLEAR_PHRASES = (
     "not sure", "i dont know", "dont know", "dunno", "maybe", "perhaps",
 )
 # Negative multi-word phrases checked before single-token logic.
-_NO_PHRASES = ("mejor no", "no lo hagas", "no gracias", "dont do", "do not", "no quiero")
-_YES_PHRASES = ("hazlo ya", "si por favor", "go ahead", "do it", "sounds good", "esta bien")
+_NO_PHRASES = (
+    "mejor no", "no lo hagas", "no gracias", "no quiero", "para nada",
+    "que va", "claro que no", "de ninguna manera", "ni loco", "nada que ver",
+    "dont do", "do not",
+)
+_YES_PHRASES = (
+    "hazlo ya", "si por favor", "claro que si", "de una", "por supuesto",
+    "como no", "obvio que si", "dale pues", "hagale pues", "esta bien",
+    "go ahead", "do it", "sounds good",
+)
 
 
 def _normalize(text: str) -> str:
