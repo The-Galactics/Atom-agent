@@ -1,8 +1,12 @@
-"""Routing-rule regression net for the intent prompt (US-C2).
+"""Catalog-to-Action mapping pins for the intent adapter (US-C2).
 
-The LLM is mocked: each test feeds the tool call the prompt's rule is meant to
-produce and asserts the adapter maps it to the expected Action. A prompt edit
-that removes a rule's tool from the catalog/mapping makes these fail in CI.
+The LLM is mocked: each test feeds a tool call directly and asserts the adapter
+maps it to the expected ActionType and parameters. These pins catch regressions
+in the tool catalog and the adapter's mapping logic.
+
+NOTE: because the LLM is mocked, gutting INTENT_SYSTEM_PROMPT would NOT fail
+any test in this suite. Prompt-text invariants are guarded separately by the
+golden assertions at the bottom of this file.
 """
 import asyncio
 import types
@@ -10,6 +14,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import adapters.intent.gemini_function_calling_adapter as mod
 from adapters.intent.gemini_function_calling_adapter import GeminiFunctionCallingAdapter
+from application.agents.prompts.intent_prompt import INTENT_SYSTEM_PROMPT
 from domain.intent.models import ActionType
 
 
@@ -126,3 +131,19 @@ def test_make_call_requires_confirmation():
     out = asyncio.run(a.recognize("llama a papá"))
     assert out.action.type is ActionType.MAKE_CALL
     assert out.requires_confirmation is True
+
+
+# --- golden invariants on prompt text ----------------------------------------
+# The LLM is mocked above so INTENT_SYSTEM_PROMPT could be gutted without
+# failing any mapping test. These assertions catch destructive prompt edits.
+
+def test_read_screen_rule_present_in_prompt():
+    assert "DEBES llamar a la herramienta 'read_screen' SIEMPRE" in INTENT_SYSTEM_PROMPT
+
+
+def test_messaging_priority_rule_present_in_prompt():
+    assert "REGLA DE PRIORIDAD DE MENSAJERÍA" in INTENT_SYSTEM_PROMPT
+
+
+def test_ecommerce_fake_search_bar_rule_present_in_prompt():
+    assert "REGLA DE BARRAS DE BÚSQUEDA FALSAS (E-commerce)" in INTENT_SYSTEM_PROMPT
