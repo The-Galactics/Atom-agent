@@ -59,6 +59,9 @@ class ExecuteCommandInputDTO:
     user_id: str = "default"
     # Structured screen snapshot from the client when accessibility is enabled.
     screen_elements: list = field(default_factory=list)
+    # Per-command id scoping the ReAct trace. Falls back to user_id when the
+    # client doesn't supply one (back-compat). A new order id => fresh history.
+    order_id: str | None = None
 
 
 @dataclass

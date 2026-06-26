@@ -1,3 +1,4 @@
+import asyncio
 import json
 import logging
 
@@ -298,4 +299,10 @@ async def serve(container, port: int = 50051):
         logger.warning("gRPC server started INSECURE (no TLS) on port %d — dev only", port)
 
     await server.start()
-    await server.wait_for_termination()
+    try:
+        await server.wait_for_termination()
+    except asyncio.CancelledError:
+        # grpc.aio doesn't stop on cancellation — C-core threads keep the process
+        # alive. Stop explicitly so the port is freed, then re-raise.
+        await server.stop(grace=5)
+        raise
