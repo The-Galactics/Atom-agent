@@ -29,12 +29,13 @@ class Settings(BaseSettings):
     google_api_key: str | None = Field(None, env="GOOGLE_API_KEY")
     # gemini-3.1-flash is a verified, deployable model id. A missing LLM_MODEL
     # override must still boot against a real model (see startup probe).
-    llm_model: str = Field("gemini-3.1-flash", env="LLM_MODEL")
+    llm_model: str = Field("models/gemini-3.1-flash-lite", env="LLM_MODEL")
     # IANA timezone used to tell the model the current date/time (see
     # domain/datetime_context). Default: Colombia.
     assistant_timezone: str = Field("America/Bogota", env="ASSISTANT_TIMEZONE")
     # When True, conversational answers are grounded with Google Search so the
-    # model can use live web information. Requires a Gemini 2.x model.
+    # model can use live web information. Requires a Gemini model that supports
+    # the native google_search tool (Gemini 2.x or newer, e.g. 3.1).
     web_search_enabled: bool = Field(True, env="WEB_SEARCH_ENABLED")
     qdrant_url: str = Field("http://localhost:6333", env="QDRANT_URL")
     qdrant_api_key: str | None = Field(None, env="QDRANT_API_KEY")

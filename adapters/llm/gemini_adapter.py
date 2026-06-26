@@ -7,21 +7,22 @@ from ports.llm_port import LLMPort
 
 logger = logging.getLogger("voice_module")
 
-# Native Gemini 2.x grounding tool. Passed at invoke time so the model decides
+# Native Gemini grounding tool (Gemini 2.x and newer). Passed at invoke time so the model decides
 # per-turn whether a web lookup is warranted (a greeting won't trigger a search).
 _GOOGLE_SEARCH_TOOL = {"google_search": {}}
 
 
 class GeminiAdapter(LLMPort):
     # LLM adapter backed by Google Gemini via LangChain.
-    def __init__(self, api_key: str, model: str = "gemini-3.1-flash-lite",
+    def __init__(self, api_key: str, model: str = "models/gemini-3.1-flash-lite",
                 web_search: bool = False):
         self.llm = ChatGoogleGenerativeAI(
             model=model,
             google_api_key=api_key,
             temperature=0.7,
         )
-        # Grounding requires a Gemini 2.x model + a recent langchain-google-genai.
+        # Grounding requires a Gemini model with the google_search tool
+        # (Gemini 2.x or newer) + a recent langchain-google-genai.
         self.web_search = web_search
 
     async def chat(self, messages: list[ChatMessage]) -> ChatMessage:
