@@ -1,3 +1,5 @@
+import asyncio
+
 from application.agents.session_store import SessionStore
 from application.dtos import ExecuteCommandInputDTO, ExecuteCommandOutputDTO
 from domain.intent.models import ActionType
@@ -29,12 +31,27 @@ class ExecuteCommandUseCase:
         self.intent_recognizer = intent_recognizer
         self.session_store = session_store or SessionStore(max_steps_per_session=max_steps)
         self.max_steps = max_steps
+        # One lock per trace key serializes get->recognize->append so concurrent
+        # calls for the same order can't both read identical history (TOCTOU).
+        self._locks: dict[str, asyncio.Lock] = {}
+
+    def _lock_for(self, key: str) -> asyncio.Lock:
+        lock = self._locks.get(key)
+        if lock is None:
+            lock = asyncio.Lock()
+            self._locks[key] = lock
+        return lock
 
     async def execute(self, input_dto: ExecuteCommandInputDTO) -> ExecuteCommandOutputDTO:
-        session_id = input_dto.user_id
-        # TODO(cross-order): trace is keyed by user_id and only cleared on
-        # completion (or TTL/LRU). An order abandoned mid-loop leaks its trace
-        # into the user's next order. Future fix: scope the trace to a per-order id.
+        # Scope the trace per order, not per user: an abandoned multi-step task
+        # no longer leaks its partial trace into the user's next command.
+        session_id = input_dto.order_id or input_dto.user_id
+        async with self._lock_for(session_id):
+            return await self._execute_locked(input_dto, session_id)
+
+    async def _execute_locked(
+        self, input_dto: ExecuteCommandInputDTO, session_id: str
+    ) -> ExecuteCommandOutputDTO:
         history = self.session_store.get(session_id)
         step = len(history) + 1
 

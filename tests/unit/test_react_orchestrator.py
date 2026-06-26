@@ -244,3 +244,38 @@ def test_sessions_are_isolated_by_user_id():
     assert recognizer.calls[1]["history"] is None
     assert len(store.get("u1")) == 1
     assert len(store.get("u2")) == 1
+
+
+def test_concurrent_calls_for_one_session_do_not_duplicate_steps():
+    # A recognizer that yields control mid-call, exposing the TOCTOU window.
+    class SlowRecognizer(IntentRecognizerPort):
+        def __init__(self, results):
+            self._results = list(results)
+            self.calls = []
+        async def recognize(self, text, session_id="default", screen=None, history=None):
+            self.calls.append(history)
+            await asyncio.sleep(0.05)          # force interleaving
+            return self._results.pop(0)
+
+    store = SessionStore()
+    uc = ExecuteCommandUseCase(SlowRecognizer([_open_app(), _tap()]), session_store=store)
+
+    async def scenario():
+        dto = ExecuteCommandInputDTO(text="hi", user_id="u1")
+        return await asyncio.gather(uc.execute(dto), uc.execute(dto))
+
+    a, b = asyncio.run(scenario())
+    # Without the lock both read empty history -> both are step 1 (duplicate).
+    assert sorted([a.step, b.step]) == [1, 2]
+
+
+def test_new_order_id_starts_with_empty_history():
+    store = SessionStore()
+    store.append("u1", "Step 1: OPEN_APP {'app_name': 'youtube'}")
+    uc = ExecuteCommandUseCase(ScriptedRecognizer([_open_app()]), session_store=store)
+
+    out = _run(uc.execute(
+        ExecuteCommandInputDTO(text="otra cosa", user_id="u1", order_id="order-2")
+    ))
+    # The abandoned u1 trace must NOT leak into a fresh order.
+    assert out.step == 1
