@@ -8,6 +8,7 @@ from api.middleware import add_hardening_middleware
 from infrastructure.config import get_settings
 from infrastructure.container import build_container
 from infrastructure.logging import configure_logging, request_logging_middleware
+from infrastructure.startup_checks import probe_intent_model
 from infrastructure.grpc.server import serve as start_grpc_server
 from infrastructure.rate_limit import SlidingWindowRateLimiter
 
@@ -21,6 +22,12 @@ async def lifespan(app: FastAPI):
     settings = get_settings()
     container = build_container(settings)
     app.state.voice_container = container
+
+    # Fail fast if the configured LLM model is invalid (e.g. a non-existent model
+    # id that would 404 on every real request). Skipped when the intent stack is
+    # disabled or the API key is absent — those paths degrade gracefully already.
+    if container.execute_command_use_case is not None:
+        await probe_intent_model(container.execute_command_use_case.intent_recognizer)
 
     # Create unique indexes (email, google_sub) so DB-level uniqueness is enforced
     # against the double-registration race (HU-27 / ATOM-54 §5.2). Runs in the
