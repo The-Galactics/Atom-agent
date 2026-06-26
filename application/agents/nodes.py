@@ -51,7 +51,7 @@ class GraphNodes:
         return {"context": context}
 
     async def generate_response(self, state: AgentState) -> dict:
-        """Generates a response using Gemma and the retrieved context."""
+        """Generates a response using Gemini and the retrieved context."""
         # System prompt injects the current date/time (the model has no clock)
         # plus any retrieved semantic context.
         system_msg = ChatMessage(
