@@ -19,6 +19,11 @@ class _TransientRecognizer:
         raise TimeoutError("503 upstream temporarily unavailable")
 
 
+class _RateLimitWithModelNameRecognizer:
+    async def recognize(self, text, session_id="default", screen=None, history=None):
+        raise RuntimeError("429 quota exceeded for model gemini-3.1-flash in region us-east1")
+
+
 def test_probe_passes_for_working_model():
     asyncio.run(probe_intent_model(_OkRecognizer()))  # must not raise
 
@@ -35,3 +40,9 @@ def test_probe_degrades_on_transient_error():
 
 def test_probe_does_nothing_when_recognizer_is_none():
     asyncio.run(probe_intent_model(None))  # must not raise
+
+
+def test_probe_degrades_on_rate_limit_mentioning_model_name():
+    # A transient 429 whose message names the model must NOT be misread as a
+    # fatal invalid-model error: the bare "model" marker was over-broad.
+    asyncio.run(probe_intent_model(_RateLimitWithModelNameRecognizer()))  # must not raise

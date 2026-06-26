@@ -9,11 +9,16 @@ import logging
 
 logger = logging.getLogger("voice_module")
 
-_INVALID_MODEL_MARKERS = ("404", "not found", "model")
+_INVALID_MODEL_MARKERS = ("404", "not found")
 
 
 def _is_invalid_model_error(exc: BaseException) -> bool:
-    """Return True if *exc* signals a permanent invalid/unknown model id."""
+    """Return True if *exc* signals a permanent invalid/unknown model id.
+
+    Only 404 / "not found" are treated as fatal. The bare word "model" is
+    deliberately excluded: a transient error (e.g. a 429/503 that names the
+    model in its message) must degrade, not abort boot.
+    """
     msg = str(exc).lower()
     return any(marker in msg for marker in _INVALID_MODEL_MARKERS)
 
