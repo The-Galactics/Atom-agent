@@ -177,6 +177,7 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             requires_confirmation=output.requires_confirmation,
             task_complete=output.task_complete,
             step=output.step,
+            awaiting_confirmation=output.awaiting_confirmation,
         )
 
     # --- User settings (protected; identity from the verified token) ---

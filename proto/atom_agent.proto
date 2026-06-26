@@ -107,6 +107,11 @@ message CommandResponse {
   bool task_complete = 7;
   // Current ReAct step index for this session (telemetry/debug).
   int32 step = 8;
+  // True on the turn that HOLDS a sensitive action and asks the user to confirm
+  // out loud (action_type is NONE, task_complete is false, the question is in
+  // out_message). The client speaks the question, captures the spoken "sí/no",
+  // and sends it as the next command with the same order_id.
+  bool awaiting_confirmation = 9;
 }
 
 // --- User settings ---

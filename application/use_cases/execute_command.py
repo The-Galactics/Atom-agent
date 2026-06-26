@@ -149,6 +149,7 @@ class ExecuteCommandUseCase:
             confidence=0.0,
             requires_confirmation=False,
             task_complete=False,
+            awaiting_confirmation=True,
             step=len(history),
         )
 
@@ -225,6 +226,7 @@ class ExecuteCommandUseCase:
                 confidence=result.confidence,
                 requires_confirmation=False,
                 task_complete=False,
+                awaiting_confirmation=True,
                 step=step,
             )
 
