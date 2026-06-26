@@ -130,8 +130,9 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             )
             return
 
-        # Identity comes from the verified token, NOT request.user_id (deprecated).
-        principal = principal_from_context(getattr(self.container, "token_service", None), context)
+        # Identity comes from the token already verified by AuthInterceptor, NOT
+        # request.user_id (deprecated) and without re-verifying the signature.
+        principal = principal_from_context()
         user_id = principal.user_id if principal else request.user_id
         input_dto = ExecuteCommandInputDTO(
             text=request.command,
@@ -177,8 +178,9 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             )
             return
 
-        # Identity comes from the verified token, NOT request.user_id (deprecated).
-        principal = principal_from_context(getattr(self.container, "token_service", None), context)
+        # Identity comes from the token already verified by AuthInterceptor, NOT
+        # request.user_id (deprecated) and without re-verifying the signature.
+        principal = principal_from_context()
         session_id = principal.user_id if principal else request.user_id
         input_dto = ChatInputDTO(text=request.message, session_id=session_id)
         # Unhandled errors propagate to the global ErrorInterceptor (US-10.1).
