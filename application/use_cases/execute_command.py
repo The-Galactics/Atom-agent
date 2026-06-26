@@ -42,12 +42,27 @@ class ExecuteCommandUseCase:
             self._locks[key] = lock
         return lock
 
+    def _release_lock(self, key: str, lock: asyncio.Lock) -> None:
+        """Evict *key* from the registry if no coroutine holds or awaits the lock.
+
+        Called after session reset so the registry stays bounded.
+        ``_waiters`` is a private asyncio.Lock attribute; accessed via getattr to
+        isolate the coupling in one place.
+        """
+        pending = bool(getattr(lock, "_waiters", None))
+        if not lock.locked() and not pending:
+            self._locks.pop(key, None)
+
     async def execute(self, input_dto: ExecuteCommandInputDTO) -> ExecuteCommandOutputDTO:
         # Scope the trace per order, not per user: an abandoned multi-step task
         # no longer leaks its partial trace into the user's next command.
         session_id = input_dto.order_id or input_dto.user_id
-        async with self._lock_for(session_id):
-            return await self._execute_locked(input_dto, session_id)
+        lock = self._lock_for(session_id)
+        async with lock:
+            result = await self._execute_locked(input_dto, session_id)
+        if result.task_complete:
+            self._release_lock(session_id, lock)
+        return result
 
     async def _execute_locked(
         self, input_dto: ExecuteCommandInputDTO, session_id: str

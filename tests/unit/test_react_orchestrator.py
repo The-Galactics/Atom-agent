@@ -279,3 +279,22 @@ def test_new_order_id_starts_with_empty_history():
     ))
     # The abandoned u1 trace must NOT leak into a fresh order.
     assert out.step == 1
+
+
+def test_locks_registry_is_bounded():
+    # Drive N distinct order_ids through to task_complete (OPEN_APP then DONE).
+    # After all sessions complete the lock registry must be empty — no leak.
+    N = 5
+    results = []
+    for _ in range(N):
+        results.extend([_open_app(), _done("ok")])
+
+    store = SessionStore()
+    uc = ExecuteCommandUseCase(ScriptedRecognizer(results), session_store=store)
+
+    for i in range(N):
+        order_id = f"order-{i}"
+        _run(uc.execute(ExecuteCommandInputDTO(text="cmd", user_id="u", order_id=order_id)))
+        _run(uc.execute(ExecuteCommandInputDTO(text="cmd", user_id="u", order_id=order_id)))
+
+    assert len(uc._locks) == 0
