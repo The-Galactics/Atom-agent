@@ -135,19 +135,23 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
         # request.user_id (deprecated) and without re-verifying the signature.
         principal = principal_from_context()
         user_id = principal.user_id if principal else request.user_id
+        # Per-turn order id scopes the ReAct trace; falls back to user_id in the
+        # use case when absent, so pre-flight and autonomous turns stay distinct.
+        order_id = request.order_id if request.order_id else None
         input_dto = ExecuteCommandInputDTO(
             text=request.command,
             user_id=user_id,
             screen_elements=[_to_screen(e) for e in request.screen_elements],
+            order_id=order_id,
         )
         # Unhandled errors propagate to the global ErrorInterceptor, which logs the
         # real cause server-side and returns a generic INTERNAL (US-10.1).
         output = await use_case.execute(input_dto)
 
         logger.info(
-            "grpc_ExecuteCommand ok peer=%s action=%s confidence=%.2f step=%d complete=%s",
+            "grpc_ExecuteCommand ok peer=%s action=%s confidence=%.2f step=%d complete=%s awaiting=%s",
             context.peer(), output.action_type, output.confidence,
-            output.step, output.task_complete,
+            output.step, output.task_complete, output.awaiting_confirmation,
         )
         return pb2.CommandResponse(
             success=output.success,
@@ -158,6 +162,7 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             requires_confirmation=output.requires_confirmation,
             task_complete=output.task_complete,
             step=output.step,
+            awaiting_confirmation=output.awaiting_confirmation,
         )
 
     async def StreamChat(self, request, context):
