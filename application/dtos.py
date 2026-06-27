@@ -62,6 +62,10 @@ class ExecuteCommandInputDTO:
     # Per-command id scoping the ReAct trace. Falls back to user_id when the
     # client doesn't supply one (back-compat). A new order id => fresh history.
     order_id: str | None = None
+    # Action types that require the conversational "ask first" confirmation for
+    # this user. None => the default outward-facing set (DEFAULT_CONFIRM_ACTIONS:
+    # MAKE_CALL, SEND_MESSAGE); an empty set => confirm nothing (full autonomy).
+    confirm_actions: frozenset[str] | None = None
 
 
 @dataclass
@@ -79,3 +83,7 @@ class ExecuteCommandOutputDTO:
     awaiting_confirmation: bool = False
     # Current ReAct step index for this session (telemetry/debug).
     step: int = 0
+    # True only on the turn that holds a sensitive action and asks the user to
+    # confirm out loud (action_type NONE, task_complete False). Lets the client
+    # tell a confirmation question apart from a conversational NONE.
+    awaiting_confirmation: bool = False

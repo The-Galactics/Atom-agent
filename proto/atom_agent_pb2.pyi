@@ -100,6 +100,22 @@ class CommandResponse(_message.Message):
     awaiting_confirmation: bool
     def __init__(self, success: _Optional[bool] = ..., out_message: _Optional[str] = ..., action_type: _Optional[str] = ..., parameters_json: _Optional[str] = ..., confidence: _Optional[float] = ..., requires_confirmation: _Optional[bool] = ..., task_complete: _Optional[bool] = ..., step: _Optional[int] = ..., awaiting_confirmation: _Optional[bool] = ...) -> None: ...
 
+class SettingsRequest(_message.Message):
+    __slots__ = ()
+    def __init__(self) -> None: ...
+
+class UpdateSettingsRequest(_message.Message):
+    __slots__ = ("settings_json",)
+    SETTINGS_JSON_FIELD_NUMBER: _ClassVar[int]
+    settings_json: str
+    def __init__(self, settings_json: _Optional[str] = ...) -> None: ...
+
+class SettingsResponse(_message.Message):
+    __slots__ = ("settings_json",)
+    SETTINGS_JSON_FIELD_NUMBER: _ClassVar[int]
+    settings_json: str
+    def __init__(self, settings_json: _Optional[str] = ...) -> None: ...
+
 class MessageRequest(_message.Message):
     __slots__ = ("user_id", "chat_id", "message")
     USER_ID_FIELD_NUMBER: _ClassVar[int]

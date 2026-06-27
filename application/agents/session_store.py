@@ -29,6 +29,10 @@ class SessionStore:
         self._ttl = ttl_seconds
         # session_id -> (steps, last_touch_monotonic)
         self._sessions: OrderedDict[str, tuple[list[str], float]] = OrderedDict()
+        # session_id -> (pending_action, last_touch_monotonic). Holds a sensitive
+        # action proposed but awaiting the user's spoken confirmation. Shares the
+        # same TTL/LRU bounds as the trace so it can't grow unbounded.
+        self._pending: OrderedDict[str, tuple[dict, float]] = OrderedDict()
 
     def _now(self) -> float:
         return time.monotonic()
@@ -40,6 +44,9 @@ class SessionStore:
         expired = [sid for sid, (_, ts) in self._sessions.items() if ts < cutoff]
         for sid in expired:
             del self._sessions[sid]
+        expired_pending = [sid for sid, (_, ts) in self._pending.items() if ts < cutoff]
+        for sid in expired_pending:
+            del self._pending[sid]
 
     def _touch(self, session_id: str) -> list[str]:
         steps, _ = self._sessions.pop(session_id, ([], 0.0))
@@ -66,5 +73,41 @@ class SessionStore:
             self._sessions.popitem(last=False)
 
     def reset(self, session_id: str) -> None:
-        """Drop the trace for ``session_id`` (called on task completion)."""
+        """Drop the trace AND any pending confirmation for ``session_id``."""
         self._sessions.pop(session_id, None)
+        self._pending.pop(session_id, None)
+
+    # --- Pending confirmation (conversational "ask first" flow) -------------
+
+    def set_pending(
+        self, session_id: str, action_type: str, parameters: dict, reasks: int = 0
+    ) -> None:
+        """Record a sensitive action awaiting the user's spoken confirmation."""
+        self._evict_expired()
+        pending = {
+            "action_type": action_type,
+            "parameters": dict(parameters or {}),
+            "reasks": reasks,
+        }
+        self._pending[session_id] = (pending, self._now())
+        self._pending.move_to_end(session_id)
+        while len(self._pending) > self._max_sessions:
+            self._pending.popitem(last=False)
+
+    def get_pending(self, session_id: str) -> dict | None:
+        """Return a copy of the pending action for ``session_id``, or None."""
+        self._evict_expired()
+        entry = self._pending.get(session_id)
+        if entry is None:
+            return None
+        pending, _ = entry
+        self._pending[session_id] = (pending, self._now())
+        self._pending.move_to_end(session_id)
+        # Deep-ish copy: callers must not mutate the stored action/parameters.
+        copy = dict(pending)
+        copy["parameters"] = dict(pending.get("parameters", {}))
+        return copy
+
+    def clear_pending(self, session_id: str) -> None:
+        """Drop any pending confirmation for ``session_id``."""
+        self._pending.pop(session_id, None)

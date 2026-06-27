@@ -18,6 +18,7 @@ from domain.errors import (
     InvalidTokenError,
     UserAlreadyExistsError,
 )
+from domain.user.preferences import confirm_actions_from_settings
 from infrastructure.grpc.auth_interceptor import AuthInterceptor, principal_from_context
 from infrastructure.grpc.error_interceptor import ErrorInterceptor
 
@@ -135,23 +136,37 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
         # request.user_id (deprecated) and without re-verifying the signature.
         principal = principal_from_context()
         user_id = principal.user_id if principal else request.user_id
-        # Per-turn order id scopes the ReAct trace; falls back to user_id in the
-        # use case when absent, so pre-flight and autonomous turns stay distinct.
-        order_id = request.order_id if request.order_id else None
+
+        # Resolve this user's configurable confirmation scope (best-effort): a
+        # repo/user miss leaves it None, which falls back to the catalog default.
+        confirm_actions = None
+        repo = getattr(self.container, "user_repository", None)
+        if repo is not None:
+            try:
+                user = await repo.find_by_id(user_id)
+                if user is not None:
+                    confirm_actions = confirm_actions_from_settings(user.settings)
+            except Exception as exc:  # noqa: BLE001 - degrade gracefully
+                logger.warning(
+                    "grpc_ExecuteCommand settings_lookup_failed peer=%s error=%s",
+                    context.peer(), exc,
+                )
+
         input_dto = ExecuteCommandInputDTO(
             text=request.command,
             user_id=user_id,
             screen_elements=[_to_screen(e) for e in request.screen_elements],
-            order_id=order_id,
+            order_id=request.order_id or None,
+            confirm_actions=confirm_actions,
         )
         # Unhandled errors propagate to the global ErrorInterceptor, which logs the
         # real cause server-side and returns a generic INTERNAL (US-10.1).
         output = await use_case.execute(input_dto)
 
         logger.info(
-            "grpc_ExecuteCommand ok peer=%s action=%s confidence=%.2f step=%d complete=%s awaiting=%s",
+            "grpc_ExecuteCommand ok peer=%s action=%s confidence=%.2f step=%d complete=%s",
             context.peer(), output.action_type, output.confidence,
-            output.step, output.task_complete, output.awaiting_confirmation,
+            output.step, output.task_complete,
         )
         return pb2.CommandResponse(
             success=output.success,
@@ -163,6 +178,51 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             task_complete=output.task_complete,
             step=output.step,
             awaiting_confirmation=output.awaiting_confirmation,
+        )
+
+    # --- User settings (protected; identity from the verified token) ---
+
+    async def GetSettings(self, request, context):
+        repo = getattr(self.container, "user_repository", None)
+        if repo is None:
+            await context.abort(grpc.StatusCode.UNAVAILABLE, "Settings service is unavailable")
+            return
+        principal = principal_from_context()
+        if principal is None:
+            await context.abort(grpc.StatusCode.UNAUTHENTICATED, "Authentication required")
+            return
+        user = await repo.find_by_id(principal.user_id)
+        settings = user.settings if user is not None else {}
+        return pb2.SettingsResponse(settings_json=json.dumps(settings, ensure_ascii=False))
+
+    async def UpdateSettings(self, request, context):
+        repo = getattr(self.container, "user_repository", None)
+        if repo is None:
+            await context.abort(grpc.StatusCode.UNAVAILABLE, "Settings service is unavailable")
+            return
+        principal = principal_from_context()
+        if principal is None:
+            await context.abort(grpc.StatusCode.UNAUTHENTICATED, "Authentication required")
+            return
+        try:
+            incoming = json.loads(request.settings_json or "{}")
+        except (ValueError, TypeError):
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "settings_json must be a JSON object")
+            return
+        if not isinstance(incoming, dict):
+            await context.abort(grpc.StatusCode.INVALID_ARGUMENT, "settings_json must be a JSON object")
+            return
+        # Sanitize the confirmation scope (drops unknown action types) before
+        # persisting, so only valid preferences are stored.
+        if isinstance(incoming.get("confirmation"), dict) and "require_for" in incoming["confirmation"]:
+            incoming["confirmation"]["require_for"] = sorted(
+                confirm_actions_from_settings(incoming)
+            )
+        current = await repo.find_by_id(principal.user_id)
+        merged = {**(current.settings if current is not None else {}), **incoming}
+        user = await repo.update_settings(principal.user_id, merged)
+        return pb2.SettingsResponse(
+            settings_json=json.dumps(user.settings, ensure_ascii=False)
         )
 
     async def StreamChat(self, request, context):

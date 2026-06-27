@@ -81,3 +81,44 @@ def test_ttl_disabled_when_non_positive(monkeypatch):
     clock["t"] += 10_000.0
 
     assert store.get("s1") == ["Step 1"]
+
+
+# --- Pending confirmation (conversational "ask first" flow) -----------------
+
+def test_set_get_clear_pending_roundtrip():
+    store = SessionStore()
+    assert store.get_pending("s1") is None
+    store.set_pending("s1", "MAKE_CALL", {"target": "mamá"}, reasks=1)
+    pending = store.get_pending("s1")
+    assert pending == {"action_type": "MAKE_CALL", "parameters": {"target": "mamá"}, "reasks": 1}
+    store.clear_pending("s1")
+    assert store.get_pending("s1") is None
+
+
+def test_get_pending_returns_a_copy():
+    store = SessionStore()
+    store.set_pending("s1", "MAKE_CALL", {"target": "mamá"})
+    got = store.get_pending("s1")
+    got["parameters"]["target"] = "otro"
+    assert store.get_pending("s1")["parameters"] == {"target": "mamá"}
+
+
+def test_reset_clears_pending_too():
+    store = SessionStore()
+    store.append("s1", "Step 1")
+    store.set_pending("s1", "SEND_MESSAGE", {"recipient": "Juan"})
+    store.reset("s1")
+    assert store.get("s1") == []
+    assert store.get_pending("s1") is None
+
+
+def test_pending_expires_on_ttl(monkeypatch):
+    import application.agents.session_store as mod
+
+    clock = {"t": 1000.0}
+    monkeypatch.setattr(mod.time, "monotonic", lambda: clock["t"])
+
+    store = SessionStore(ttl_seconds=10.0)
+    store.set_pending("s1", "MAKE_CALL", {"target": "mamá"})
+    clock["t"] += 11.0
+    assert store.get_pending("s1") is None
