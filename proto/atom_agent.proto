@@ -78,6 +78,11 @@ message CommandRequest {
   string command = 2;
   // Current on-screen map; empty when the accessibility service is disabled.
   repeated ScreenElement screen_elements = 3;
+  // Per-command id scoping the ReAct trace. Distinct ids keep the throwaway
+  // pre-flight recognize() and the real autonomous turn in separate sessions
+  // (so the voice-confirmation handshake isn't corrupted). Empty => server
+  // falls back to the user id (back-compat).
+  string order_id = 4;
 }
 
 message CommandResponse {
@@ -98,6 +103,11 @@ message CommandResponse {
   bool task_complete = 7;
   // Current ReAct step index for this session (telemetry/debug).
   int32 step = 8;
+  // True on the turn that HOLDS a sensitive action and asks the user to confirm
+  // out loud (action_type is NONE, task_complete is false, question in
+  // out_message). The client speaks it, captures the spoken "sí/no", and sends
+  // that as the next command with the same order_id.
+  bool awaiting_confirmation = 9;
 }
 
 message MessageRequest {
