@@ -78,6 +78,9 @@ class ExecuteCommandOutputDTO:
     requires_confirmation: bool = False
     # True when the ReAct task is finished; the client stops looping.
     task_complete: bool = False
+    # True when the backend holds a sensitive action awaiting spoken sí/no; action_type is NONE
+    # and out_message carries the question. Client resends the reply with the same order_id.
+    awaiting_confirmation: bool = False
     # Current ReAct step index for this session (telemetry/debug).
     step: int = 0
     # True only on the turn that holds a sensitive action and asks the user to
