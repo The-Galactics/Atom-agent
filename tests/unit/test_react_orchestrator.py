@@ -281,6 +281,97 @@ def test_new_order_id_starts_with_empty_history():
     assert out.step == 1
 
 
+def _send_message(recipient="sebastian", body="Hola bro", app="whatsapp"):
+    return IntentResult(
+        action=Action(
+            type=ActionType.SEND_MESSAGE,
+            parameters={"recipient": recipient, "body": body, "app": app},
+        ),
+        reply="",
+        confidence=1.0,
+        requires_confirmation=True,
+    )
+
+
+def test_sensitive_action_is_held_for_confirmation_not_executed():
+    # A SEND_MESSAGE must NOT be emitted as executable on first sight: the backend
+    # HOLDS it and asks out loud (awaiting_confirmation), with the question in the
+    # reply and action_type NONE so the client speaks it and captures a sí/no.
+    store = SessionStore()
+    recognizer = ScriptedRecognizer([_send_message()])
+    uc = ExecuteCommandUseCase(intent_recognizer=recognizer, session_store=store)
+
+    out = _run(uc.execute(
+        ExecuteCommandInputDTO(text="mándale un mensaje a sebastian", user_id="u", order_id="o1")))
+
+    assert out.awaiting_confirmation is True
+    assert out.action_type == "NONE"
+    assert out.task_complete is False
+    assert "sebastian" in out.reply_text.lower()
+    # Nothing recorded yet: the action is held, not executed.
+    assert store.get("o1") == []
+
+
+def test_affirmative_reply_emits_the_held_action():
+    # After the hold, an affirmative spoken reply (resent with the SAME order_id)
+    # releases the held SEND_MESSAGE as an executable action the client runs.
+    store = SessionStore()
+    recognizer = ScriptedRecognizer([_send_message()])
+    uc = ExecuteCommandUseCase(intent_recognizer=recognizer, session_store=store)
+
+    _run(uc.execute(ExecuteCommandInputDTO(text="manda un mensaje", user_id="u", order_id="o1")))
+    out = _run(uc.execute(ExecuteCommandInputDTO(text="sí", user_id="u", order_id="o1")))
+
+    assert out.action_type == "SEND_MESSAGE"
+    assert out.parameters == {"recipient": "sebastian", "body": "Hola bro", "app": "whatsapp"}
+    assert out.awaiting_confirmation is False
+    # The recognizer was consulted only once: the "sí" turn replays the held
+    # action, it does not re-run recognition.
+    assert len(recognizer.calls) == 1
+
+
+def test_negative_reply_cancels_the_held_action():
+    store = SessionStore()
+    recognizer = ScriptedRecognizer([_send_message()])
+    uc = ExecuteCommandUseCase(intent_recognizer=recognizer, session_store=store)
+
+    _run(uc.execute(ExecuteCommandInputDTO(text="manda un mensaje", user_id="u", order_id="o1")))
+    out = _run(uc.execute(ExecuteCommandInputDTO(text="no, déjalo", user_id="u", order_id="o1")))
+
+    assert out.action_type == "NONE"
+    assert out.task_complete is True          # the task ends, the client stops looping
+    assert out.awaiting_confirmation is False
+    assert store.get("o1") == []              # session cleared
+
+
+def test_confirmed_action_is_not_held_again_on_re_recognition():
+    # After confirming and emitting the action, the next ReAct turn that resolves
+    # the SAME action must NOT re-ask: it is emitted directly so the loop can
+    # progress (and the anti-repeat guard can eventually complete it).
+    store = SessionStore()
+    recognizer = ScriptedRecognizer([_send_message(), _send_message()])
+    uc = ExecuteCommandUseCase(intent_recognizer=recognizer, session_store=store)
+
+    _run(uc.execute(ExecuteCommandInputDTO(text="manda un mensaje", user_id="u", order_id="o1")))
+    _run(uc.execute(ExecuteCommandInputDTO(text="sí", user_id="u", order_id="o1")))   # emits
+    out = _run(uc.execute(ExecuteCommandInputDTO(text="manda un mensaje", user_id="u", order_id="o1")))
+
+    assert out.action_type == "SEND_MESSAGE"
+    assert out.awaiting_confirmation is False
+
+
+def test_non_sensitive_action_is_never_held():
+    # OPEN_APP is hands-free: it must execute immediately, never holding.
+    store = SessionStore()
+    recognizer = ScriptedRecognizer([_open_app()])
+    uc = ExecuteCommandUseCase(intent_recognizer=recognizer, session_store=store)
+
+    out = _run(uc.execute(ExecuteCommandInputDTO(text="abre youtube", user_id="u", order_id="o1")))
+
+    assert out.action_type == "OPEN_APP"
+    assert out.awaiting_confirmation is False
+
+
 def test_locks_registry_is_bounded():
     # Drive N distinct order_ids through to task_complete (OPEN_APP then DONE).
     # After all sessions complete the lock registry must be empty — no leak.

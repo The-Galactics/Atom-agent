@@ -145,7 +145,10 @@ def test_execute_command_maps_recognized_action():
     assert recognizer.last_session == "u1"
 
 
-def test_execute_command_sensitive_action_requires_confirmation():
+def test_execute_command_sensitive_action_is_held_then_confirmed():
+    # A sensitive action (MAKE_CALL) is HELD on first sight: the backend asks out
+    # loud (awaiting_confirmation, action NONE) instead of emitting it. The
+    # spoken affirmative, resent with the same order_id, releases the action.
     recognizer = FakeIntentRecognizer(
         IntentResult(
             action=Action(type=ActionType.MAKE_CALL, parameters={"target": "mamá"}),
@@ -156,12 +159,18 @@ def test_execute_command_sensitive_action_requires_confirmation():
     )
     use_case = ExecuteCommandUseCase(intent_recognizer=recognizer)
 
-    output = asyncio.run(use_case.execute(ExecuteCommandInputDTO(text="llama a mamá")))
+    held = asyncio.run(use_case.execute(
+        ExecuteCommandInputDTO(text="llama a mamá", order_id="o1")))
+    assert held.awaiting_confirmation is True
+    assert held.action_type == "NONE"
+    assert held.task_complete is False
+    assert "mamá" in held.reply_text
 
-    assert output.action_type == "MAKE_CALL"
-    assert output.requires_confirmation is True
-    # Bare tool call without text gets a default spoken confirmation.
-    assert output.reply_text == "De acuerdo."
+    confirmed = asyncio.run(use_case.execute(
+        ExecuteCommandInputDTO(text="sí", order_id="o1")))
+    assert confirmed.action_type == "MAKE_CALL"
+    assert confirmed.parameters == {"target": "mamá"}
+    assert confirmed.awaiting_confirmation is False
 
 
 def test_execute_command_forwards_screen_to_recognizer():
