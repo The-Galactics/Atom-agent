@@ -3,6 +3,7 @@ import logging
 from langchain_google_genai import ChatGoogleGenerativeAI
 from adapters.llm.content import extract_text
 from domain.conversation.models import ChatMessage
+from infrastructure.observability.latency import timed
 from ports.llm_port import LLMPort
 
 logger = logging.getLogger("voice_module")
@@ -43,11 +44,13 @@ class GeminiAdapter(LLMPort):
         """
         if self.web_search:
             try:
-                return await self.llm.ainvoke(
-                    langchain_messages, tools=[_GOOGLE_SEARCH_TOOL]
-                )
+                with timed("llm.chat"):
+                    return await self.llm.ainvoke(
+                        langchain_messages, tools=[_GOOGLE_SEARCH_TOOL]
+                    )
             except Exception as exc:  # noqa: BLE001 - degrade, don't fail the turn
                 logger.warning(
                     "web_search_grounding_failed falling_back_ungrounded error=%s", exc
                 )
-        return await self.llm.ainvoke(langchain_messages)
+        with timed("llm.chat"):
+            return await self.llm.ainvoke(langchain_messages)

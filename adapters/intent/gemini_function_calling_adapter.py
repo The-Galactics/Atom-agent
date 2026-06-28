@@ -3,6 +3,7 @@ import logging
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from adapters.llm.content import extract_text
+from infrastructure.observability.latency import timed
 from application.agents.prompts.intent_prompt import INTENT_SYSTEM_PROMPT
 from domain.datetime_context import current_datetime_sentence
 from domain.errors import ProviderError
@@ -111,7 +112,8 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
             if cleaned:
                 messages.append(("human", _render_screen(cleaned)))
         try:
-            response = await self._llm.ainvoke(messages)
+            with timed("llm.intent"):
+                response = await self._llm.ainvoke(messages)
         except Exception as exc:  # noqa: BLE001 - surface provider failures uniformly
             logger.warning("intent_recognize_failed session_id=%s error=%s", session_id, exc)
             raise ProviderError(f"intent recognition failed: {exc}") from exc
