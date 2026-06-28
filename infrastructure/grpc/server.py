@@ -19,6 +19,7 @@ from domain.errors import (
     UserAlreadyExistsError,
 )
 from domain.user.preferences import confirm_actions_from_settings
+from infrastructure.cache.ttl_cache import TtlCache
 from infrastructure.grpc.auth_interceptor import AuthInterceptor, principal_from_context
 from infrastructure.grpc.error_interceptor import ErrorInterceptor
 from infrastructure.observability.latency import timed
@@ -52,6 +53,7 @@ def _auth_response(pair):
 class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
     def __init__(self, container):
         self.container = container
+        self._settings_cache = TtlCache(ttl_seconds=30)
 
     # --- Auth (public RPCs; the interceptor lets them through without a token) ---
 
@@ -145,10 +147,15 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             repo = getattr(self.container, "user_repository", None)
             if repo is not None:
                 try:
-                    with timed("ExecuteCommand.mongo"):
-                        user = await repo.find_by_id(user_id)
-                    if user is not None:
-                        confirm_actions = confirm_actions_from_settings(user.settings)
+                    cached = self._settings_cache.get(user_id)
+                    if cached is not None:
+                        confirm_actions = cached
+                    else:
+                        with timed("ExecuteCommand.mongo"):
+                            user = await repo.find_by_id(user_id)
+                        if user is not None:
+                            confirm_actions = confirm_actions_from_settings(user.settings)
+                            self._settings_cache.put(user_id, confirm_actions)
                 except Exception as exc:  # noqa: BLE001 - degrade gracefully
                     logger.warning(
                         "grpc_ExecuteCommand settings_lookup_failed peer=%s error=%s",
@@ -224,6 +231,7 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
         current = await repo.find_by_id(principal.user_id)
         merged = {**(current.settings if current is not None else {}), **incoming}
         user = await repo.update_settings(principal.user_id, merged)
+        self._settings_cache.invalidate(principal.user_id)
         return pb2.SettingsResponse(
             settings_json=json.dumps(user.settings, ensure_ascii=False)
         )
