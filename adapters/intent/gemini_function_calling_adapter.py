@@ -84,12 +84,15 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
     """
 
     def __init__(self, api_key: str, model: str = "models/gemini-3.1-flash-lite",
-                timezone: str = "America/Bogota", system_prompt: str | None = None):
+                timezone: str = "America/Bogota", system_prompt: str | None = None,
+                max_output_tokens: int = 256):
         llm = ChatGoogleGenerativeAI(
             model=model,
             google_api_key=api_key,
             temperature=0.0,  # deterministic routing for orders
+            max_output_tokens=max_output_tokens,
         )
+        self._base_llm = llm
         # Bind once; the bound model is reused for every recognition call.
         self._llm = llm.bind_tools(openai_tools())
         self._timezone = timezone

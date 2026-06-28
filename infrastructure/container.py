@@ -223,6 +223,7 @@ def _build_intent_use_case(settings: Settings, embedding_adapter: Optional[Embed
             model=settings.llm_model,
             timezone=settings.assistant_timezone,
             system_prompt=INTENT_SYSTEM_PROMPT,
+            max_output_tokens=settings.llm_intent_max_output_tokens,
         )
 
         # Action cache: a separate Qdrant collection keyed by command text.
@@ -280,6 +281,7 @@ def _build_llm_stack(settings: Settings, history_adapter: HistoryPort):
             api_key=settings.google_api_key,
             model=settings.llm_model,
             web_search=settings.web_search_enabled,
+            max_output_tokens=settings.llm_max_output_tokens,
         )
         embedding_adapter = GeminiEmbeddingAdapter(
             api_key=settings.google_api_key,
