@@ -8,6 +8,12 @@ option java_outer_classname = "AiProto";
 
 service AtomAgentService {
 
+  // --- Auth (HU-27): these RPCs do NOT require an access token ---
+  rpc Register               (RegisterRequest)   returns (AuthResponse);
+  rpc Login                  (LoginRequest)      returns (AuthResponse);
+  rpc AuthenticateWithGoogle (GoogleAuthRequest) returns (AuthResponse);
+  rpc RefreshToken           (RefreshRequest)    returns (AuthResponse);
+
   // Conversational AI (Unary call)
   rpc ExecuteCommand (CommandRequest) returns (CommandResponse);
 
@@ -20,13 +26,67 @@ service AtomAgentService {
   // Voice: Text-to-Speech
   rpc Synthesize (SynthesizeRequest) returns (stream SynthesizeResponse);
 
+  // User settings (synced client preferences, incl. which actions require
+  // spoken confirmation). Identity comes from the access token.
+  rpc GetSettings    (SettingsRequest)       returns (SettingsResponse);
+  rpc UpdateSettings (UpdateSettingsRequest) returns (SettingsResponse);
+
+}
+
+// --- Auth Messages (HU-27 / ATOM-54) ---
+
+message RegisterRequest {
+  string email = 1;
+  string password = 2;         // plaintext only over TLS; hashed (Argon2id) server-side
+  string display_name = 3;
+}
+
+message LoginRequest {
+  string email = 1;
+  string password = 2;
+}
+
+// OIDC ID token issued by Google (verified server-side: signature, aud, exp, email_verified).
+message GoogleAuthRequest {
+  string id_token = 1;
+}
+
+message RefreshRequest {
+  string refresh_token = 1;
+}
+
+message AuthResponse {
+  string access_token = 1;     // short-lived signed JWT
+  string refresh_token = 2;    // opaque, revocable (single-use rotation)
+  int64 expires_in = 3;        // access-token lifetime in seconds
+  string user_id = 4;
 }
 
 // --- Chat Messages ---
 
+// One on-screen node captured by the Android accessibility service, typed so the
+// model reasons over screen structure without text-parsing overhead.
+message ScreenElement {
+  string text = 1;        // visible text or content description
+  string role = 2;        // short widget class: Button, EditText, TextView, ...
+  bool clickable = 3;
+  bool focusable = 4;
+  bool editable = 5;
+  bool scrollable = 6;
+  int32 index = 7;        // stable ordinal for unambiguous target resolution
+}
+
 message CommandRequest {
-  string user_id = 1;
+  // DEPRECATED: ignored by the server, which derives the identity from the
+  // verified access token (Authorization metadata). Kept for back-compat.
+  string user_id = 1 [deprecated = true];
   string command = 2;
+  // Current on-screen map; empty when the accessibility service is disabled.
+  repeated ScreenElement screen_elements = 3;
+  // Client-generated id scoping ONE ReAct task/order across its turns (incl. the
+  // confirmation question + the user's "sí/no" reply). A new id => fresh trace.
+  // Optional; empty falls back to the user identity (legacy behavior).
+  string order_id = 4;
 }
 
 message CommandResponse {
@@ -43,12 +103,41 @@ message CommandResponse {
   // When true the client should confirm with the user before executing
   // (sensitive actions such as calling or sending a message).
   bool requires_confirmation = 6;
+  // True when the ReAct task is finished; the client stops looping.
+  bool task_complete = 7;
+  // Current ReAct step index for this session (telemetry/debug).
+  int32 step = 8;
+  // True on the turn that HOLDS a sensitive action and asks the user to confirm
+  // out loud (action_type is NONE, task_complete is false, the question is in
+  // out_message). The client speaks the question, captures the spoken "sí/no",
+  // and sends it as the next command with the same order_id.
+  bool awaiting_confirmation = 9;
+}
+
+// --- User settings ---
+
+// Settings are carried as a JSON object string (the same blob the client syncs
+// into User.settings), so adding new preferences never requires a proto change.
+message SettingsRequest {}
+
+message UpdateSettingsRequest {
+  // JSON object merged into the user's stored settings, e.g.
+  // {"confirmation": {"require_for": ["MAKE_CALL", "SEND_MESSAGE"]}}.
+  string settings_json = 1;
+}
+
+message SettingsResponse {
+  // The user's full settings as a JSON object string.
+  string settings_json = 1;
 }
 
 message MessageRequest {
-  string user_id = 1;
+  // DEPRECATED: ignored by the server, which derives the identity from the
+  // verified access token (Authorization metadata). Kept for back-compat.
+  string user_id = 1 [deprecated = true];
   string chat_id = 2;
   string message = 3;
+  bool enable_web_search = 4;
 }
 
 message MessageResponse {

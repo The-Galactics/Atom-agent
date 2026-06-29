@@ -20,7 +20,8 @@ class ChatUseCase:
             "input": input_dto.text,
             "messages": history,
             "context": "",
-            "response": None
+            "response": None,
+            "web_search": input_dto.enable_web_search,
         }
         final_state = await self.graph.ainvoke(initial_state)
 

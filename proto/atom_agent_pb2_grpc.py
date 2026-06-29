@@ -34,6 +34,26 @@ class AtomAgentServiceStub:
         Args:
             channel: A grpc.Channel.
         """
+        self.Register = channel.unary_unary(
+                '/com.atom.proto.AtomAgentService/Register',
+                request_serializer=proto_dot_atom__agent__pb2.RegisterRequest.SerializeToString,
+                response_deserializer=proto_dot_atom__agent__pb2.AuthResponse.FromString,
+                _registered_method=True)
+        self.Login = channel.unary_unary(
+                '/com.atom.proto.AtomAgentService/Login',
+                request_serializer=proto_dot_atom__agent__pb2.LoginRequest.SerializeToString,
+                response_deserializer=proto_dot_atom__agent__pb2.AuthResponse.FromString,
+                _registered_method=True)
+        self.AuthenticateWithGoogle = channel.unary_unary(
+                '/com.atom.proto.AtomAgentService/AuthenticateWithGoogle',
+                request_serializer=proto_dot_atom__agent__pb2.GoogleAuthRequest.SerializeToString,
+                response_deserializer=proto_dot_atom__agent__pb2.AuthResponse.FromString,
+                _registered_method=True)
+        self.RefreshToken = channel.unary_unary(
+                '/com.atom.proto.AtomAgentService/RefreshToken',
+                request_serializer=proto_dot_atom__agent__pb2.RefreshRequest.SerializeToString,
+                response_deserializer=proto_dot_atom__agent__pb2.AuthResponse.FromString,
+                _registered_method=True)
         self.ExecuteCommand = channel.unary_unary(
                 '/com.atom.proto.AtomAgentService/ExecuteCommand',
                 request_serializer=proto_dot_atom__agent__pb2.CommandRequest.SerializeToString,
@@ -54,10 +74,45 @@ class AtomAgentServiceStub:
                 request_serializer=proto_dot_atom__agent__pb2.SynthesizeRequest.SerializeToString,
                 response_deserializer=proto_dot_atom__agent__pb2.SynthesizeResponse.FromString,
                 _registered_method=True)
+        self.GetSettings = channel.unary_unary(
+                '/com.atom.proto.AtomAgentService/GetSettings',
+                request_serializer=proto_dot_atom__agent__pb2.SettingsRequest.SerializeToString,
+                response_deserializer=proto_dot_atom__agent__pb2.SettingsResponse.FromString,
+                _registered_method=True)
+        self.UpdateSettings = channel.unary_unary(
+                '/com.atom.proto.AtomAgentService/UpdateSettings',
+                request_serializer=proto_dot_atom__agent__pb2.UpdateSettingsRequest.SerializeToString,
+                response_deserializer=proto_dot_atom__agent__pb2.SettingsResponse.FromString,
+                _registered_method=True)
 
 
 class AtomAgentServiceServicer:
     """Missing associated documentation comment in .proto file."""
+
+    def Register(self, request, context):
+        """--- Auth (HU-27): these RPCs do NOT require an access token ---
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def Login(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def AuthenticateWithGoogle(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RefreshToken(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
 
     def ExecuteCommand(self, request, context):
         """Conversational AI (Unary call)
@@ -87,9 +142,43 @@ class AtomAgentServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetSettings(self, request, context):
+        """User settings (synced client preferences, incl. which actions require
+        spoken confirmation). Identity comes from the access token.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateSettings(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_AtomAgentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
+            'Register': grpc.unary_unary_rpc_method_handler(
+                    servicer.Register,
+                    request_deserializer=proto_dot_atom__agent__pb2.RegisterRequest.FromString,
+                    response_serializer=proto_dot_atom__agent__pb2.AuthResponse.SerializeToString,
+            ),
+            'Login': grpc.unary_unary_rpc_method_handler(
+                    servicer.Login,
+                    request_deserializer=proto_dot_atom__agent__pb2.LoginRequest.FromString,
+                    response_serializer=proto_dot_atom__agent__pb2.AuthResponse.SerializeToString,
+            ),
+            'AuthenticateWithGoogle': grpc.unary_unary_rpc_method_handler(
+                    servicer.AuthenticateWithGoogle,
+                    request_deserializer=proto_dot_atom__agent__pb2.GoogleAuthRequest.FromString,
+                    response_serializer=proto_dot_atom__agent__pb2.AuthResponse.SerializeToString,
+            ),
+            'RefreshToken': grpc.unary_unary_rpc_method_handler(
+                    servicer.RefreshToken,
+                    request_deserializer=proto_dot_atom__agent__pb2.RefreshRequest.FromString,
+                    response_serializer=proto_dot_atom__agent__pb2.AuthResponse.SerializeToString,
+            ),
             'ExecuteCommand': grpc.unary_unary_rpc_method_handler(
                     servicer.ExecuteCommand,
                     request_deserializer=proto_dot_atom__agent__pb2.CommandRequest.FromString,
@@ -110,6 +199,16 @@ def add_AtomAgentServiceServicer_to_server(servicer, server):
                     request_deserializer=proto_dot_atom__agent__pb2.SynthesizeRequest.FromString,
                     response_serializer=proto_dot_atom__agent__pb2.SynthesizeResponse.SerializeToString,
             ),
+            'GetSettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetSettings,
+                    request_deserializer=proto_dot_atom__agent__pb2.SettingsRequest.FromString,
+                    response_serializer=proto_dot_atom__agent__pb2.SettingsResponse.SerializeToString,
+            ),
+            'UpdateSettings': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateSettings,
+                    request_deserializer=proto_dot_atom__agent__pb2.UpdateSettingsRequest.FromString,
+                    response_serializer=proto_dot_atom__agent__pb2.SettingsResponse.SerializeToString,
+            ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
             'com.atom.proto.AtomAgentService', rpc_method_handlers)
@@ -120,6 +219,114 @@ def add_AtomAgentServiceServicer_to_server(servicer, server):
  # This class is part of an EXPERIMENTAL API.
 class AtomAgentService:
     """Missing associated documentation comment in .proto file."""
+
+    @staticmethod
+    def Register(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/com.atom.proto.AtomAgentService/Register',
+            proto_dot_atom__agent__pb2.RegisterRequest.SerializeToString,
+            proto_dot_atom__agent__pb2.AuthResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def Login(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/com.atom.proto.AtomAgentService/Login',
+            proto_dot_atom__agent__pb2.LoginRequest.SerializeToString,
+            proto_dot_atom__agent__pb2.AuthResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AuthenticateWithGoogle(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/com.atom.proto.AtomAgentService/AuthenticateWithGoogle',
+            proto_dot_atom__agent__pb2.GoogleAuthRequest.SerializeToString,
+            proto_dot_atom__agent__pb2.AuthResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RefreshToken(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/com.atom.proto.AtomAgentService/RefreshToken',
+            proto_dot_atom__agent__pb2.RefreshRequest.SerializeToString,
+            proto_dot_atom__agent__pb2.AuthResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
 
     @staticmethod
     def ExecuteCommand(request,
@@ -219,6 +426,60 @@ class AtomAgentService:
             '/com.atom.proto.AtomAgentService/Synthesize',
             proto_dot_atom__agent__pb2.SynthesizeRequest.SerializeToString,
             proto_dot_atom__agent__pb2.SynthesizeResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetSettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/com.atom.proto.AtomAgentService/GetSettings',
+            proto_dot_atom__agent__pb2.SettingsRequest.SerializeToString,
+            proto_dot_atom__agent__pb2.SettingsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateSettings(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/com.atom.proto.AtomAgentService/UpdateSettings',
+            proto_dot_atom__agent__pb2.UpdateSettingsRequest.SerializeToString,
+            proto_dot_atom__agent__pb2.SettingsResponse.FromString,
             options,
             channel_credentials,
             insecure,

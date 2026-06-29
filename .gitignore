@@ -32,6 +32,7 @@ pip-wheel-metadata/
 .DS_Store
 .idea/
 .vscode/
+.claude/
 
 # Logs
 *.log
@@ -60,6 +61,16 @@ models/
 # Local data
 storage/
 qdrant_storage/
+mongo_storage/
 nohup.out
 output.log
 .venv/
+
+# Coverage artifacts
+tests/coverage_html/
+
+# Secrets (JWT PEM keys, etc.)
+secrets/
+
+# Mongo data (VPS)
+mongo_data/

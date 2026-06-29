@@ -11,7 +11,12 @@ class VectorStorePort(ABC):
 
     @abstractmethod
     async def search(
-        self, query: str, limit: int = 5, score_threshold: float = 0.5
+        self, query: str, limit: int = 5, score_threshold: float = 0.5,
+        session_id: str | None = None,
     ) -> list[MemoryEntry]:
-        """Searches for relevant memory entries based on semantic similarity."""
+        """Searches for relevant memory entries by semantic similarity.
+
+        When ``session_id`` is given, results are restricted to that session/user
+        (multi-tenant isolation) — a user never retrieves another user's memory.
+        """
         pass

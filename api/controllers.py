@@ -6,6 +6,7 @@ from application.use_cases.transcribe_audio import TranscribeAudioUseCase
 from application.use_cases.synthesize_speech import SynthesizeSpeechUseCase
 from application.use_cases.chat import ChatUseCase
 from api.schemas import SynthesizeRequest, TranscribeResponse, ChatRequest, ChatResponse
+from api.exceptions import generic_message, log_exception, new_request_id
 from domain.errors import DomainError, DomainValidationError, ProviderError
 
 
@@ -25,6 +26,17 @@ def _error_detail(code: str, message: str, request_id: str | None) -> dict:
     }
 
 
+def _server_error(
+    code: str, status: int, message: str, exc: BaseException,
+    *, context: str, request_id: str | None,
+) -> HTTPException:
+    """Build a sanitized 5xx error (US-10.1): the client gets a generic message
+    plus a correlation request_id; the real cause is logged server-side only."""
+    rid = request_id or new_request_id()
+    log_exception(code, rid, exc, context=context)
+    return HTTPException(status_code=status, detail=_error_detail(code, message, rid))
+
+
 def create_chat_router(chat_use_case_provider: UseCaseProviderChat) -> APIRouter:
     # Router for chat interactions.
     router = APIRouter(prefix="/chat", tags=["chat"])
@@ -38,17 +50,41 @@ def create_chat_router(chat_use_case_provider: UseCaseProviderChat) -> APIRouter
         request: ChatRequest,
         x_request_id: str | None = Header(None, alias="X-Request-Id"),
     ) -> ChatResponse:
+        # Resolve outside the try so a missing provider degrades to 503, not 500.
+        use_case = _resolve_chat_use_case()
+        if use_case is None:
+            raise HTTPException(
+                status_code=503,
+                detail=_error_detail(
+                    "CHAT_UNAVAILABLE", "LLM provider unavailable", x_request_id
+                ),
+            )
         try:
             input_dto = ChatInputDTO(
                 text=request.text,
                 session_id=request.session_id,
             )
-            output = await _resolve_chat_use_case().execute(input_dto)
+            output = await use_case.execute(input_dto)
             return ChatResponse(text=output.text, session_id=output.session_id)
-        except Exception as exc:
+        except ValidationError as exc:
             raise HTTPException(
-                status_code=500,
-                detail=_error_detail("CHAT_ERROR", str(exc), x_request_id),
+                status_code=400,
+                detail=_error_detail("INVALID_REQUEST", str(exc), x_request_id),
+            ) from exc
+        except DomainValidationError as exc:
+            raise HTTPException(
+                status_code=400,
+                detail=_error_detail("VALIDATION_ERROR", str(exc), x_request_id),
+            ) from exc
+        except ProviderError as exc:
+            raise _server_error(
+                "CHAT_UNAVAILABLE", 503, "Chat service is temporarily unavailable",
+                exc, context="chat", request_id=x_request_id,
+            ) from exc
+        except DomainError as exc:
+            raise _server_error(
+                "CHAT_ERROR", 500, generic_message("INTERNAL"),
+                exc, context="chat", request_id=x_request_id,
             ) from exc
 
     return router
@@ -121,14 +157,14 @@ def create_voice_router(
                 detail=_error_detail("VALIDATION_ERROR", message, x_request_id),
             ) from exc
         except ProviderError as exc:
-            raise HTTPException(
-                status_code=503,
-                detail=_error_detail("STT_PROVIDER_UNAVAILABLE", str(exc), x_request_id),
+            raise _server_error(
+                "STT_PROVIDER_UNAVAILABLE", 503, "Voice service is temporarily unavailable",
+                exc, context="transcribe", request_id=x_request_id,
             ) from exc
         except DomainError as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=_error_detail("DOMAIN_ERROR", str(exc), x_request_id),
+            raise _server_error(
+                "DOMAIN_ERROR", 500, generic_message("INTERNAL"),
+                exc, context="transcribe", request_id=x_request_id,
             ) from exc
 
     @router.post("/synthesize")
@@ -174,14 +210,14 @@ def create_voice_router(
                 detail=_error_detail("VALIDATION_ERROR", message, x_request_id),
             ) from exc
         except ProviderError as exc:
-            raise HTTPException(
-                status_code=503,
-                detail=_error_detail("TTS_PROVIDER_UNAVAILABLE", str(exc), x_request_id),
+            raise _server_error(
+                "TTS_PROVIDER_UNAVAILABLE", 503, "Voice service is temporarily unavailable",
+                exc, context="synthesize", request_id=x_request_id,
             ) from exc
         except DomainError as exc:
-            raise HTTPException(
-                status_code=500,
-                detail=_error_detail("DOMAIN_ERROR", str(exc), x_request_id),
+            raise _server_error(
+                "DOMAIN_ERROR", 500, generic_message("INTERNAL"),
+                exc, context="synthesize", request_id=x_request_id,
             ) from exc
 
     @router.get("/health")

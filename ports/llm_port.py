@@ -10,6 +10,7 @@ class LLMPort(ABC):
         messages: list[ChatMessage],
         temperature: float = 0.7,
         max_tokens: int = 1024,
+        web_search: bool | None = None,
     ) -> ChatMessage:
         """Sends a list of messages to the LLM and returns the assistant's response."""
         pass

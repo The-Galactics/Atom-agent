@@ -19,9 +19,14 @@ class TranscribeResponse(BaseModel):
     provider: str
 
 
+# Upper bound on a single chat turn (Fase 2A.3): rejects abusive/oversized
+# prompts before they reach the LLM. Tune via this constant, not magic numbers.
+MAX_CHAT_TEXT_CHARS = 4000
+
+
 class ChatRequest(BaseModel):
     # Request schema for chat endpoint.
-    text: str = Field(..., min_length=1)
+    text: str = Field(..., min_length=1, max_length=MAX_CHAT_TEXT_CHARS)
     session_id: str = "default"
 
 

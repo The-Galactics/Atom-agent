@@ -23,6 +23,7 @@ from application.dtos import (
     TranscribeAudioOutputDTO,
 )
 from infrastructure.grpc.server import AtomGrpcService
+from infrastructure.grpc.error_interceptor import ErrorInterceptor
 
 
 class _FakeChatUseCase:
@@ -92,7 +93,9 @@ def _make_container(**overrides):
 
 
 async def _with_stub(container, callback):
-    server = grpc.aio.server()
+    # Include the ErrorInterceptor so these tests exercise the real end-to-end
+    # sanitization (US-10.1), matching how serve() wires the server.
+    server = grpc.aio.server(interceptors=[ErrorInterceptor()])
     pb2_grpc.add_AtomAgentServiceServicer_to_server(AtomGrpcService(container), server)
     port = server.add_insecure_port("[::]:0")
     await server.start()
@@ -207,7 +210,10 @@ def test_grpc_execute_command_unavailable_when_use_case_missing():
             )
 
         assert exc_info.value.code() == grpc.StatusCode.UNAVAILABLE
-        assert "Intent provider unavailable: intent stack offline" in exc_info.value.details()
+        details = exc_info.value.details()
+        # Internal status must not leak; client sees a generic message.
+        assert "intent stack offline" not in details
+        assert "temporarily unavailable" in details
 
     container = _make_container(
         execute_command_use_case=None,
@@ -224,7 +230,12 @@ def test_grpc_execute_command_internal_when_use_case_raises():
             )
 
         assert exc_info.value.code() == grpc.StatusCode.INTERNAL
-        assert "command failed: boom" in exc_info.value.details()
+        details = exc_info.value.details()
+        # The raw exception text must never reach the client; only a generic
+        # message plus a correlation request_id.
+        assert "boom" not in details
+        assert "Internal server error occurred" in details
+        assert "request_id=" in details
 
     container = _make_container(execute_command_use_case=_FailingExecuteCommandUseCase())
     asyncio.run(_with_stub(container, _scenario))
@@ -239,9 +250,29 @@ def test_grpc_stream_chat_internal_when_use_case_raises():
                 pass
 
         assert exc_info.value.code() == grpc.StatusCode.INTERNAL
-        assert "chat failed: chat boom" in exc_info.value.details()
+        details = exc_info.value.details()
+        assert "chat boom" not in details
+        assert "Internal server error occurred" in details
+        assert "request_id=" in details
 
     container = _make_container(chat_use_case=_FailingChatUseCase())
+    asyncio.run(_with_stub(container, _scenario))
+
+
+def test_grpc_stream_chat_unavailable_when_use_case_missing():
+    async def _scenario(stub):
+        with pytest.raises(grpc.aio.AioRpcError) as exc_info:
+            async for _chunk in stub.StreamChat(
+                pb2.MessageRequest(user_id="user_001", chat_id="chat_001", message="hola")
+            ):
+                pass
+
+        assert exc_info.value.code() == grpc.StatusCode.UNAVAILABLE
+        details = exc_info.value.details()
+        assert "llm stack offline" not in details
+        assert "temporarily unavailable" in details
+
+    container = _make_container(chat_use_case=None, llm_status="llm stack offline")
     asyncio.run(_with_stub(container, _scenario))
 
 
@@ -259,7 +290,9 @@ def test_grpc_transcribe_unavailable_when_use_case_missing():
             )
 
         assert exc_info.value.code() == grpc.StatusCode.UNAVAILABLE
-        assert "Voice provider unavailable (STT): voice stack offline" in exc_info.value.details()
+        details = exc_info.value.details()
+        assert "voice stack offline" not in details
+        assert "temporarily unavailable" in details
 
     container = _make_container(transcribe_use_case=None, voice_status="voice stack offline")
     asyncio.run(_with_stub(container, _scenario))
@@ -280,7 +313,9 @@ def test_grpc_synthesize_unavailable_when_use_case_missing():
                 pass
 
         assert exc_info.value.code() == grpc.StatusCode.UNAVAILABLE
-        assert "Voice provider unavailable (TTS): voice stack offline" in exc_info.value.details()
+        details = exc_info.value.details()
+        assert "voice stack offline" not in details
+        assert "temporarily unavailable" in details
 
     container = _make_container(synthesize_use_case=None, voice_status="voice stack offline")
     asyncio.run(_with_stub(container, _scenario))

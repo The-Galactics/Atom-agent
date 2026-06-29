@@ -4,10 +4,13 @@ from contextlib import asynccontextmanager
 from fastapi import FastAPI, Response
 
 from api.controllers import create_voice_router, create_chat_router
+from api.middleware import add_hardening_middleware
 from infrastructure.config import get_settings
 from infrastructure.container import build_container
 from infrastructure.logging import configure_logging, request_logging_middleware
+from infrastructure.startup_checks import probe_intent_model
 from infrastructure.grpc.server import serve as start_grpc_server
+from infrastructure.rate_limit import SlidingWindowRateLimiter
 
 
 # Configure global logging before app startup.
@@ -20,6 +23,19 @@ async def lifespan(app: FastAPI):
     container = build_container(settings)
     app.state.voice_container = container
 
+    # Fail fast if the configured LLM model is invalid (e.g. a non-existent model
+    # id that would 404 on every real request). Skipped when the intent stack is
+    # disabled or the API key is absent — those paths degrade gracefully already.
+    if container.execute_command_use_case is not None:
+        await probe_intent_model(container.execute_command_use_case.intent_recognizer)
+
+    # Create unique indexes (email, google_sub) so DB-level uniqueness is enforced
+    # against the double-registration race (HU-27 / ATOM-54 §5.2). Runs in the
+    # background (like the gRPC server) so an unreachable Mongo cannot stall startup
+    # on motor's server-selection timeout; ensure_auth_indexes is best-effort and a
+    # no-op when auth is off.
+    index_task = asyncio.create_task(container.ensure_auth_indexes())
+
     # Start gRPC server in a background task (listens on :50051 by default)
     grpc_task = asyncio.create_task(
         start_grpc_server(container, port=getattr(settings, "grpc_port", 50051))
@@ -31,16 +47,47 @@ async def lifespan(app: FastAPI):
     finally:
         # --- Shutdown ---
         grpc_task.cancel()
+        index_task.cancel()
         try:
             await grpc_task
+        except asyncio.CancelledError:
+            pass
+        try:
+            await index_task
         except asyncio.CancelledError:
             pass
         if hasattr(app.state, "voice_container"):
             app.state.voice_container.shutdown()
 
 
-app = FastAPI(title="Atom Agent", version="0.2.0", lifespan=lifespan)
+def docs_settings(app_env: str) -> dict:
+    """FastAPI doc-exposure flags by environment (Fase 2A.7).
+
+    In production (or its ``prod`` alias) the interactive docs and the OpenAPI
+    schema are turned off so the API surface is not advertised; enabled elsewhere.
+    """
+    if app_env.lower() in ("production", "prod"):
+        return {"docs_url": None, "redoc_url": None, "openapi_url": None}
+    return {"docs_url": "/docs", "redoc_url": "/redoc", "openapi_url": "/openapi.json"}
+
+
+_settings = get_settings()
+app = FastAPI(
+    title="Atom Agent",
+    version="0.2.0",
+    lifespan=lifespan,
+    **docs_settings(_settings.app_env),
+)
 app.middleware("http")(request_logging_middleware)
+# Body-size cap (413) + per-client rate limit (429) before any handler runs.
+add_hardening_middleware(
+    app,
+    max_body_bytes=_settings.http_max_body_bytes,
+    limiter=SlidingWindowRateLimiter(
+        _settings.rate_limit_max_requests,
+        _settings.rate_limit_window_seconds,
+    ),
+)
 
 
 @app.get("/health")

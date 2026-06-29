@@ -1,3 +1,4 @@
+import asyncio
 import logging
 import time
 import uuid
@@ -30,13 +31,16 @@ class QdrantAdapter(VectorStorePort):
         dedup_threshold: float = 0.95,
         ttl_days: int = 30,
         prune_every: int = 20,
-        vector_size: int = 3072,
+        vector_size: int = 0,
     ):
         self.url = url
         self.api_key = api_key
         self.collection_name = collection_name
         self.embedding_port = embedding_port
-        # Embedding dimensionality; must match the configured embedding model.
+        # Embedding dimensionality. 0 = auto-detect from the first real embedding
+        # (so the collection always matches the model and never mismatches —
+        # the root cause of the previous "embeddings failing"). A positive value
+        # pins the size explicitly.
         self.vector_size = vector_size
         # Memory-hygiene knobs (see Settings). dedup_threshold >= 1.0 disables
         # dedup; ttl_days <= 0 disables TTL pruning.
@@ -45,59 +49,83 @@ class QdrantAdapter(VectorStorePort):
         self.prune_every = max(1, prune_every)
         self._store_count = 0
         self._client: QdrantClient | None = None
+        self._collection_ready = False
+        self._ensure_lock = asyncio.Lock()
 
     @property
     def client(self) -> QdrantClient:
+        # Lazily create the client only. Collection bootstrap is deferred to the
+        # async ``_ensure_collection`` so the true vector dimension can be taken
+        # from a real embedding instead of a (possibly wrong) configured number.
         if self._client is None:
             self._client = QdrantClient(url=self.url, api_key=self.api_key)
-            self._ensure_collection()
         return self._client
 
-    def _ensure_collection(self):
-        # Verify the collection exists and has the expected vector dimension.
-        # Use the private ``_client`` here (not the ``client`` property) because
-        # this runs from inside the property after ``_client`` is assigned;
-        # referencing the property would recurse back into ``_ensure_collection``.
-        try:
-            collection_info = self._client.get_collection(self.collection_name)
-            current_size = collection_info.config.params.vectors.size
-            if current_size != self.vector_size:
-                print(f"Dimension mismatch (expected {self.vector_size}, got {current_size}). Recreating collection...")
-                self._client.delete_collection(self.collection_name)
-                self._create_collection()
-        except Exception:
-            # Collection does not exist
-            self._create_collection()
+    async def _ensure_collection(self, dim: int) -> None:
+        # Idempotent: create the collection on first use, sized to the model's
+        # actual embedding dimension (``vector_size`` when pinned, else ``dim``).
+        if self._collection_ready:
+            return
+        async with self._ensure_lock:
+            if self._collection_ready:   # double-check after acquiring
+                return
+            target = self.vector_size if self.vector_size else dim
+            client = self.client
+            try:
+                collection_info = await asyncio.to_thread(
+                    client.get_collection, self.collection_name)
+                current_size = collection_info.config.params.vectors.size
+                if current_size != target:
+                    logger.warning(
+                        "qdrant_dim_mismatch collection=%s expected=%s got=%s recreating",
+                        self.collection_name, target, current_size,
+                    )
+                    await asyncio.to_thread(client.delete_collection, self.collection_name)
+                    await asyncio.to_thread(self._create_collection, target)
+            except Exception:
+                # Collection does not exist yet.
+                await asyncio.to_thread(self._create_collection, target)
+            self.vector_size = target
+            self._collection_ready = True
 
-    def _create_collection(self):
-        self._client.create_collection(
+    def _create_collection(self, size: int) -> None:
+        self.client.create_collection(
             collection_name=self.collection_name,
             vectors_config=rest.VectorParams(
-                size=self.vector_size, distance=rest.Distance.COSINE
+                size=size, distance=rest.Distance.COSINE
             ),
         )
-        # Index created_at so TTL pruning (delete-by-range) stays efficient.
+        # Index created_at so TTL pruning (delete-by-range) stays efficient, and
+        # user_id so the per-user isolation filter stays fast.
         try:
-            self._client.create_payload_index(
+            self.client.create_payload_index(
                 collection_name=self.collection_name,
                 field_name="created_at",
                 field_schema=rest.PayloadSchemaType.INTEGER,
             )
-        except Exception as exc:  # non-fatal: pruning still works without it
+            self._client.create_payload_index(
+                collection_name=self.collection_name,
+                field_name="user_id",
+                field_schema=rest.PayloadSchemaType.KEYWORD,
+            )
+        except Exception as exc:  # non-fatal: filtering/pruning still works without it
             logger.warning("qdrant_index_failed error=%s", exc)
 
     async def store(self, content: str, metadata: dict) -> None:
         # Embed content once; reuse the vector for dedup and upsert.
         vector = await self.embedding_port.embed_text(content)
+        # Bootstrap the collection to the embedding's real dimension on first use.
+        await self._ensure_collection(len(vector))
 
-        # #2 Dedup: skip storing a near-duplicate of an existing memory.
-        if self.dedup_threshold < 1.0 and self._is_duplicate(vector):
-            logger.info("memory_dedup_skipped session_id=%s", metadata.get("session_id"))
+        # #2 Dedup: skip storing a near-duplicate within the SAME session.
+        if self.dedup_threshold < 1.0 and await self._is_duplicate(vector, metadata.get("user_id")):
+            logger.info("memory_dedup_skipped user_id=%s", metadata.get("user_id"))
             return
 
         # Deterministic id on content+session so exact repeats collapse on upsert.
         point_id = str(uuid.uuid5(uuid.NAMESPACE_DNS, content + str(metadata)))
-        self.client.upsert(
+        await asyncio.to_thread(
+            self.client.upsert,
             collection_name=self.collection_name,
             points=[
                 rest.PointStruct(
@@ -111,26 +139,30 @@ class QdrantAdapter(VectorStorePort):
         # #3 TTL: prune expired memories every `prune_every` stores (throttled).
         self._store_count += 1
         if self.ttl_seconds > 0 and self._store_count % self.prune_every == 0:
-            self._prune_expired()
+            await self._prune_expired()
 
-    def _is_duplicate(self, vector: list[float]) -> bool:
-        # A near-duplicate exists if the closest point clears the dedup threshold.
+    async def _is_duplicate(self, vector: list[float], session_id: str | None = None) -> bool:
+        # A near-duplicate exists if the closest point in the SAME session clears
+        # the dedup threshold.
         try:
-            hits = self.client.query_points(
+            hits = (await asyncio.to_thread(
+                self.client.query_points,
                 collection_name=self.collection_name,
                 query=vector,
                 limit=1,
                 score_threshold=self.dedup_threshold,
-            ).points
+                query_filter=self._session_filter(session_id),
+            )).points
             return bool(hits)
         except Exception:
             return False
 
-    def _prune_expired(self) -> None:
+    async def _prune_expired(self) -> None:
         # Delete memories older than the TTL window.
         cutoff = int(time.time()) - self.ttl_seconds
         try:
-            self.client.delete(
+            await asyncio.to_thread(
+                self.client.delete,
                 collection_name=self.collection_name,
                 points_selector=rest.FilterSelector(
                     filter=rest.Filter(
@@ -144,17 +176,32 @@ class QdrantAdapter(VectorStorePort):
         except Exception as exc:
             logger.warning("memory_prune_failed error=%s", exc)
 
+    def _session_filter(self, session_id: str | None):
+        # Restrict a query to one session/user, or None for an unfiltered query.
+        if not session_id:
+            return None
+        return rest.Filter(
+            must=[rest.FieldCondition(
+                key="user_id", match=rest.MatchValue(value=session_id))]
+        )
+
     async def search(
-        self, query: str, limit: int = 5, score_threshold: float = 0.5
+        self, query: str, limit: int = 5, score_threshold: float = 0.5,
+        session_id: str | None = None,
     ) -> list[MemoryEntry]:
-        # Embed query and return mapped memory entries.
+        # Embed query and return mapped memory entries, isolated by session_id so
+        # a user never retrieves another user's memory.
         vector = await self.embedding_port.embed_text(query)
-        results = self.client.query_points(
+        # Bootstrap the collection to the embedding's real dimension on first use.
+        await self._ensure_collection(len(vector))
+        results = (await asyncio.to_thread(
+            self.client.query_points,
             collection_name=self.collection_name,
             query=vector,
             limit=limit,
             score_threshold=score_threshold,
-        ).points
+            query_filter=self._session_filter(session_id),
+        )).points
 
         return [
             MemoryEntry(

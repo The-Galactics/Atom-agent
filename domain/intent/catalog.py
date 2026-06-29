@@ -82,11 +82,22 @@ ACTION_CATALOG: tuple[ActionSpec, ...] = (
     ActionSpec(
         type=ActionType.SEND_MESSAGE,
         tool_name="send_message",
-        description="Envía un mensaje de texto a un contacto.",
+        description=(
+            "Envía un mensaje a un contacto enrutándolo directamente a la app indicada por "
+            "'app': 'whatsapp'/'telegram' abren esa app de mensajería instantánea, y 'sms' "
+            "abre la app nativa de SMS. Para peticiones de mensajería prefiere 'whatsapp'."
+        ),
         parameters=(
             ParameterSpec("recipient", "string", "Nombre del contacto o número destinatario."),
             ParameterSpec("body", "string", "Contenido del mensaje a enviar."),
-            ParameterSpec("app", "string", "App de mensajería opcional, p. ej. 'whatsapp', 'sms'.", required=False),
+            ParameterSpec(
+                "app",
+                "string",
+                "App destino del mensaje (opcional): 'whatsapp' o 'telegram' abren esa app de "
+                "mensajería instantánea directamente; 'sms' abre la app nativa de SMS. Para "
+                "peticiones de mensajería prefiere 'whatsapp'.",
+                required=False,
+            ),
         ),
         requires_confirmation=True,
     ),
@@ -95,7 +106,12 @@ ACTION_CATALOG: tuple[ActionSpec, ...] = (
         tool_name="set_alarm",
         description="Programa una alarma a una hora concreta.",
         parameters=(
-            ParameterSpec("time", "string", "Hora de la alarma en formato 24h 'HH:MM'."),
+            ParameterSpec(
+                "time",
+                "string",
+                "Hora en formato 24h 'HH:MM' con dígitos, p. ej. '07:30' o '23:00'. "
+                "Nunca uses palabras como 'mediodía'; conviértelas a dígitos (mediodía = '12:00').",
+            ),
             ParameterSpec("label", "string", "Etiqueta opcional de la alarma.", required=False),
         ),
     ),
@@ -104,7 +120,12 @@ ACTION_CATALOG: tuple[ActionSpec, ...] = (
         tool_name="set_timer",
         description="Inicia un temporizador con una duración dada.",
         parameters=(
-            ParameterSpec("duration_seconds", "integer", "Duración del temporizador en segundos."),
+            ParameterSpec(
+                "duration_seconds",
+                "integer",
+                "Duración total en SEGUNDOS como número entero, p. ej. '300' para 5 minutos. "
+                "Convierte minutos/horas a segundos; nunca uses texto.",
+            ),
             ParameterSpec("label", "string", "Etiqueta opcional del temporizador.", required=False),
         ),
     ),
@@ -120,6 +141,69 @@ ACTION_CATALOG: tuple[ActionSpec, ...] = (
             ParameterSpec(
                 "state", "string", "Estado deseado del ajuste.",
                 enum=("on", "off", "toggle"),
+            ),
+        ),
+    ),
+    # --- Accessibility-powered actions --------------------------------------
+    # Fulfilled on-device by the AccessibilityService (global navigation,
+    # gestures, reading and tapping on-screen nodes).
+    ActionSpec(
+        type=ActionType.NAVIGATE,
+        tool_name="navigate",
+        description="Realiza una navegación global del sistema: atrás, inicio, recientes o ajustes rápidos.",
+        parameters=(
+            ParameterSpec(
+                "direction", "string", "Acción de navegación a realizar.",
+                enum=("back", "home", "recents", "quick_settings"),
+            ),
+        ),
+    ),
+    ActionSpec(
+        type=ActionType.SCROLL,
+        tool_name="scroll",
+        description="Desplaza la pantalla actual en la dirección indicada.",
+        parameters=(
+            ParameterSpec(
+                "direction", "string", "Dirección del desplazamiento.",
+                enum=("up", "down", "left", "right"),
+            ),
+        ),
+    ),
+    ActionSpec(
+        type=ActionType.READ_SCREEN,
+        tool_name="read_screen",
+        description=(
+            "Lee en voz alta el contenido visible de la pantalla actual. Úsala "
+            "siempre que el usuario pida leer, oír o saber qué hay en la pantalla, "
+            "p. ej. 'lee la pantalla', 'léeme la pantalla', 'qué hay en la pantalla', "
+            "'qué ves', 'qué pone', 'descríbeme la pantalla'."
+        ),
+        parameters=(),
+    ),
+    ActionSpec(
+        type=ActionType.TAP_ELEMENT,
+        tool_name="tap_element",
+        description="Pulsa un elemento de la pantalla identificado por su texto visible.",
+        parameters=(
+            ParameterSpec("text", "string", "Texto visible del elemento a pulsar, p. ej. 'Aceptar', 'Ajustes'."),
+        ),
+        requires_confirmation=True,
+    ),
+    ActionSpec(
+        type=ActionType.TYPE_TEXT,
+        tool_name="type_text",
+        description=(
+            "Escribe texto en el campo editable o de búsqueda que está enfocado en "
+            "la pantalla, p. ej. para introducir una consulta de búsqueda. Úsala en "
+            "lugar de intentar 'teclear' pulsando elementos. Pon 'submit' en true "
+            "para confirmar/ejecutar la búsqueda tras escribir."
+        ),
+        parameters=(
+            ParameterSpec("text", "string", "Texto a escribir en el campo, p. ej. la consulta de búsqueda."),
+            ParameterSpec(
+                "submit", "boolean",
+                "Si es true (por defecto), confirma/envía tras escribir, p. ej. ejecuta la búsqueda.",
+                required=False,
             ),
         ),
     ),
@@ -141,3 +225,59 @@ def spec_for_type(action_type: ActionType) -> ActionSpec | None:
 def openai_tools() -> list[dict]:
     """All actions as OpenAI-style tool definitions for ``bind_tools``."""
     return [spec.to_openai_tool() for spec in ACTION_CATALOG]
+
+
+_TRUE_STRINGS = {"true", "1", "yes", "on"}
+_FALSE_STRINGS = {"false", "0", "no", "off"}
+
+
+def validate_and_coerce_args(
+    spec: ActionSpec, args: dict
+) -> tuple[dict, list[str]]:
+    """Validate ``args`` against an action's ``ParameterSpec``s (Fase 2A.5).
+
+    Returns ``(coerced, errors)``: the LLM/tool layer is untrusted, so missing
+    required params, enum violations and bad types are reported instead of being
+    passed through. Type-coerces integer/boolean params from their string forms
+    (the function-calling layer often hands everything back as strings).
+    """
+    coerced: dict = {}
+    errors: list[str] = []
+    provided = args or {}
+
+    for param in spec.parameters:
+        if param.name not in provided:
+            if param.required:
+                errors.append(f"missing required parameter: {param.name}")
+            continue
+
+        value = provided[param.name]
+
+        if param.type == "integer":
+            try:
+                value = int(value)
+            except (TypeError, ValueError):
+                errors.append(f"{param.name} must be an integer")
+                continue
+        elif param.type == "boolean":
+            if isinstance(value, bool):
+                pass
+            elif isinstance(value, str) and value.strip().lower() in _TRUE_STRINGS:
+                value = True
+            elif isinstance(value, str) and value.strip().lower() in _FALSE_STRINGS:
+                value = False
+            else:
+                errors.append(f"{param.name} must be a boolean")
+                continue
+        else:  # "string"
+            value = str(value)
+
+        if param.enum is not None and value not in param.enum:
+            errors.append(
+                f"{param.name} must be one of {param.enum}, got {value!r}"
+            )
+            continue
+
+        coerced[param.name] = value
+
+    return coerced, errors

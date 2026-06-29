@@ -2,6 +2,7 @@ import asyncio
 import logging
 
 from domain.conversation.models import ChatMessage
+from domain.datetime_context import current_datetime_sentence
 from domain.memory.importance import is_memorable
 from application.agents.state import AgentState
 from ports.llm_port import LLMPort
@@ -13,11 +14,13 @@ logger = logging.getLogger("voice_module")
 class GraphNodes:
     # LangGraph node implementations for chat orchestration.
     def __init__(self, llm_port: LLMPort, vector_store_port: VectorStorePort,
-                 memory_enabled: bool = True, memory_min_words: int = 4):
+                 memory_enabled: bool = True, memory_min_words: int = 4,
+                 timezone: str = "America/Bogota"):
         self.llm = llm_port
         self.vector_store = vector_store_port
         self.memory_enabled = memory_enabled
         self.memory_min_words = memory_min_words
+        self.timezone = timezone
         # Keeps strong refs to fire-and-forget store tasks so they aren't GC'd.
         self._bg_tasks: set[asyncio.Task] = set()
 
@@ -33,7 +36,10 @@ class GraphNodes:
         if not self.memory_enabled:
             return {"context": ""}
         try:
-            results = await self.vector_store.search(state["input"])
+            # Isolate retrieval to this session/user — never read another user's memory.
+            results = await self.vector_store.search(
+                state["input"], session_id=state.get("session_id")
+            )
             context = "\n".join([r.content for r in results])
         except Exception as exc:
             logger.warning(
@@ -45,18 +51,22 @@ class GraphNodes:
         return {"context": context}
 
     async def generate_response(self, state: AgentState) -> dict:
-        """Generates a response using Gemma and the retrieved context."""
-        # System prompt injects retrieved semantic context.
+        """Generates a response using Gemini and the retrieved context."""
+        # System prompt injects the current date/time (the model has no clock)
+        # plus any retrieved semantic context.
         system_msg = ChatMessage(
             role="system",
-            content=f"Eres Atom. Contexto relevante:\n{state['context']}"
+            content=(
+                f"Eres Atom. {current_datetime_sentence(self.timezone)}\n"
+                f"Contexto relevante:\n{state['context']}"
+            )
         )
         user_msg = ChatMessage(role="user", content=state["input"])
 
         # Prepare messages including history (simplified for now)
         messages = [system_msg] + state["messages"] + [user_msg]
 
-        response = await self.llm.chat(messages)
+        response = await self.llm.chat(messages, web_search=state.get("web_search", False))
         # Return both messages so downstream nodes/use cases can persist them.
         return {"response": response, "messages": [user_msg, response]}
 
@@ -86,6 +96,6 @@ class GraphNodes:
     async def _persist(self, content: str, session_id: str) -> None:
         """Embeds + upserts the interaction off the request path. Best-effort."""
         try:
-            await self.vector_store.store(content, {"session_id": session_id})
+            await self.vector_store.store(content, {"user_id": session_id})
         except Exception as exc:
             logger.warning("memory_store_failed session_id=%s error=%s", session_id, exc)
