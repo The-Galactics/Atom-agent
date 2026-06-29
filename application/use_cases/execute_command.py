@@ -3,13 +3,13 @@ import logging
 
 from application.agents.session_store import SessionStore
 from application.dtos import ChatInputDTO, ExecuteCommandInputDTO, ExecuteCommandOutputDTO
-
-logger = logging.getLogger(__name__)
 from domain.intent.affirmation import classify_affirmation
 from domain.intent.confirmation import confirmation_prompt
 from domain.intent.models import ActionType
 from domain.user.preferences import DEFAULT_CONFIRM_ACTIONS
 from ports.intent_port import IntentRecognizerPort
+
+logger = logging.getLogger(__name__)
 
 # Prior steps that must match the current action before the loop is "stuck".
 # 2 => 3 identical actions in a row; tolerates one transient repeat.
@@ -236,19 +236,23 @@ class ExecuteCommandUseCase:
             )
 
         reply = result.reply
-        if action_type is ActionType.NONE and self.chat_use_case is not None:
+        if action_type is ActionType.NONE and not history and self.chat_use_case is not None:
             # Conversational turn: return the real grounded chat answer (history +
             # memory + persistence) so the client needs no second StreamChat call.
+            # Only genuine single-shot NONE turns (empty history) reach here;
+            # ReAct completion turns (NONE + non-empty history) fall through so they
+            # keep the recognizer's summary and do not pollute per-user chat history.
             try:
                 chat_out = await self.chat_use_case.execute(
                     ChatInputDTO(text=input_dto.text, session_id=input_dto.user_id)
                 )
-                reply = chat_out.text
+                reply = chat_out.text or reply
             except Exception:
                 logger.warning(
                     "conversational chat pipeline failed; using recognizer reply",
                     exc_info=True,
                 )
+                # reply already holds result.reply (set above), so this is a silent fall-through to the recognizer reply
         elif not reply and result.action.is_executable:
             # Default spoken confirmation for a bare tool call with no text.
             reply = "De acuerdo."
