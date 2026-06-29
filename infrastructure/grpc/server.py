@@ -155,7 +155,8 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
                             user = await repo.find_by_id(user_id)
                         if user is not None:
                             confirm_actions = confirm_actions_from_settings(user.settings)
-                            self._settings_cache.put(user_id, confirm_actions)
+                            if confirm_actions is not None:
+                                self._settings_cache.put(user_id, confirm_actions)
                 except Exception as exc:  # noqa: BLE001 - degrade gracefully
                     logger.warning(
                         "grpc_ExecuteCommand settings_lookup_failed peer=%s error=%s",
