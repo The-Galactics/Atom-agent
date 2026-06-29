@@ -71,3 +71,6 @@ tests/coverage_html/
 
 # Secrets (JWT PEM keys, etc.)
 secrets/
+
+# Mongo data (VPS)
+mongo_data/

@@ -10,3 +10,7 @@ tests
 ai
 speech.wav
 sample.wav
+
+# Runtime data dirs (bind mounts; not build inputs, and unreadable by the build context)
+qdrant_storage/
+mongo_data/
