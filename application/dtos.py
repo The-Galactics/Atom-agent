@@ -83,7 +83,3 @@ class ExecuteCommandOutputDTO:
     awaiting_confirmation: bool = False
     # Current ReAct step index for this session (telemetry/debug).
     step: int = 0
-    # True only on the turn that holds a sensitive action and asks the user to
-    # confirm out loud (action_type NONE, task_complete False). Lets the client
-    # tell a confirmation question apart from a conversational NONE.
-    awaiting_confirmation: bool = False
