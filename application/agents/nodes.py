@@ -66,7 +66,7 @@ class GraphNodes:
         # Prepare messages including history (simplified for now)
         messages = [system_msg] + state["messages"] + [user_msg]
 
-        response = await self.llm.chat(messages)
+        response = await self.llm.chat(messages, web_search=state.get("web_search", False))
         # Return both messages so downstream nodes/use cases can persist them.
         return {"response": response, "messages": [user_msg, response]}
 

@@ -8,6 +8,7 @@ from domain.datetime_context import current_datetime_sentence
 from domain.errors import ProviderError
 from domain.intent.catalog import openai_tools, spec_for_tool, validate_and_coerce_args
 from domain.intent.models import Action, ActionType, IntentResult
+from infrastructure.observability.latency import timed
 from ports.intent_port import IntentRecognizerPort
 
 logger = logging.getLogger("voice_module")
@@ -83,11 +84,13 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
     """
 
     def __init__(self, api_key: str, model: str = "models/gemini-3.1-flash-lite",
-                timezone: str = "America/Bogota", system_prompt: str | None = None):
+                timezone: str = "America/Bogota", system_prompt: str | None = None,
+                max_output_tokens: int = 256):
         llm = ChatGoogleGenerativeAI(
             model=model,
             google_api_key=api_key,
             temperature=0.0,  # deterministic routing for orders
+            max_output_tokens=max_output_tokens,
         )
         # Bind once; the bound model is reused for every recognition call.
         self._llm = llm.bind_tools(openai_tools())
@@ -111,7 +114,8 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
             if cleaned:
                 messages.append(("human", _render_screen(cleaned)))
         try:
-            response = await self._llm.ainvoke(messages)
+            with timed("llm.intent"):
+                response = await self._llm.ainvoke(messages)
         except Exception as exc:  # noqa: BLE001 - surface provider failures uniformly
             logger.warning("intent_recognize_failed session_id=%s error=%s", session_id, exc)
             raise ProviderError(f"intent recognition failed: {exc}") from exc

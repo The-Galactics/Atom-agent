@@ -197,7 +197,7 @@ def _build_voice_adapters(settings: Settings):
     return kokoro_client, stt_adapter, tts_adapter, status
 
 
-def _build_intent_use_case(settings: Settings, embedding_adapter: Optional[EmbeddingPort]):
+def _build_intent_use_case(settings: Settings, embedding_adapter: Optional[EmbeddingPort], chat_use_case=None):
     """Construct the order/intent use case defensively.
 
     Returns (use_case, status). ``use_case`` is ``None`` when the function-
@@ -223,6 +223,7 @@ def _build_intent_use_case(settings: Settings, embedding_adapter: Optional[Embed
             model=settings.llm_model,
             timezone=settings.assistant_timezone,
             system_prompt=INTENT_SYSTEM_PROMPT,
+            max_output_tokens=settings.llm_intent_max_output_tokens,
         )
 
         # Action cache: a separate Qdrant collection keyed by command text.
@@ -257,6 +258,7 @@ def _build_intent_use_case(settings: Settings, embedding_adapter: Optional[Embed
             intent_recognizer=recognizer,
             session_store=session_store,
             max_steps=settings.intent_max_steps,
+            chat_use_case=chat_use_case,
         )
         return use_case, "ready"
     except Exception as exc:  # pragma: no cover - defensive
@@ -280,6 +282,7 @@ def _build_llm_stack(settings: Settings, history_adapter: HistoryPort):
             api_key=settings.google_api_key,
             model=settings.llm_model,
             web_search=settings.web_search_enabled,
+            max_output_tokens=settings.llm_max_output_tokens,
         )
         embedding_adapter = GeminiEmbeddingAdapter(
             api_key=settings.google_api_key,
@@ -426,7 +429,9 @@ def build_container(settings: Settings) -> AppContainer:
     # Built defensively: degrades to UNAVAILABLE if the provider is misconfigured.
     # Non-action utterances resolve to a NONE action; the client re-routes those
     # to StreamChat (which uses chat_use_case) for the grounded reply.
-    execute_command_use_case, intent_status = _build_intent_use_case(settings, embedding_adapter)
+    execute_command_use_case, intent_status = _build_intent_use_case(
+        settings, embedding_adapter, chat_use_case
+    )
 
     (
         token_service,

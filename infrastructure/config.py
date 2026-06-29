@@ -36,7 +36,11 @@ class Settings(BaseSettings):
     # When True, conversational answers are grounded with Google Search so the
     # model can use live web information. Requires a Gemini model that supports
     # the native google_search tool (Gemini 2.x or newer, e.g. 3.1).
-    web_search_enabled: bool = Field(True, env="WEB_SEARCH_ENABLED")
+    web_search_enabled: bool = Field(False, env="WEB_SEARCH_ENABLED")
+    # Cap model output length: bounds worst-case generation time and keeps a phone
+    # assistant's answers concise (also curbs rambling/hallucination).
+    llm_max_output_tokens: int = Field(768, env="LLM_MAX_OUTPUT_TOKENS")
+    llm_intent_max_output_tokens: int = Field(256, env="LLM_INTENT_MAX_OUTPUT_TOKENS")
     qdrant_url: str = Field("http://localhost:6333", env="QDRANT_URL")
     qdrant_api_key: str | None = Field(None, env="QDRANT_API_KEY")
     qdrant_collection: str = Field("memory", env="QDRANT_COLLECTION")

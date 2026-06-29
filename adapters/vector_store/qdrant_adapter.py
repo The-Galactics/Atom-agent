@@ -50,6 +50,7 @@ class QdrantAdapter(VectorStorePort):
         self._store_count = 0
         self._client: QdrantClient | None = None
         self._collection_ready = False
+        self._ensure_lock = asyncio.Lock()
 
     @property
     def client(self) -> QdrantClient:
@@ -65,23 +66,27 @@ class QdrantAdapter(VectorStorePort):
         # actual embedding dimension (``vector_size`` when pinned, else ``dim``).
         if self._collection_ready:
             return
-        target = self.vector_size if self.vector_size else dim
-        client = self.client
-        try:
-            collection_info = client.get_collection(self.collection_name)
-            current_size = collection_info.config.params.vectors.size
-            if current_size != target:
-                logger.warning(
-                    "qdrant_dim_mismatch collection=%s expected=%s got=%s recreating",
-                    self.collection_name, target, current_size,
-                )
-                client.delete_collection(self.collection_name)
-                self._create_collection(target)
-        except Exception:
-            # Collection does not exist yet.
-            self._create_collection(target)
-        self.vector_size = target
-        self._collection_ready = True
+        async with self._ensure_lock:
+            if self._collection_ready:   # double-check after acquiring
+                return
+            target = self.vector_size if self.vector_size else dim
+            client = self.client
+            try:
+                collection_info = await asyncio.to_thread(
+                    client.get_collection, self.collection_name)
+                current_size = collection_info.config.params.vectors.size
+                if current_size != target:
+                    logger.warning(
+                        "qdrant_dim_mismatch collection=%s expected=%s got=%s recreating",
+                        self.collection_name, target, current_size,
+                    )
+                    await asyncio.to_thread(client.delete_collection, self.collection_name)
+                    await asyncio.to_thread(self._create_collection, target)
+            except Exception:
+                # Collection does not exist yet.
+                await asyncio.to_thread(self._create_collection, target)
+            self.vector_size = target
+            self._collection_ready = True
 
     def _create_collection(self, size: int) -> None:
         self.client.create_collection(

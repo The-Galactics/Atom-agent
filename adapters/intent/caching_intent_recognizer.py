@@ -24,6 +24,7 @@ import logging
 
 from domain.intent.catalog import spec_for_type
 from domain.intent.models import Action, ActionType, IntentResult
+from infrastructure.observability.latency import timed
 from ports.intent_port import IntentRecognizerPort
 from ports.vector_store_port import VectorStorePort
 
@@ -65,7 +66,8 @@ class CachingIntentRecognizer(IntentRecognizerPort):
                 text, session_id=session_id, screen=screen, history=history
             )
 
-        cached = await self._lookup(text)
+        with timed("skills.cache_lookup"):
+            cached = await self._lookup(text)
         if cached is not None:
             logger.info("intent_cache_hit session_id=%s action=%s",
                         session_id, cached.action.type.value)

@@ -19,8 +19,10 @@ from domain.errors import (
     UserAlreadyExistsError,
 )
 from domain.user.preferences import confirm_actions_from_settings
+from infrastructure.cache.ttl_cache import TtlCache
 from infrastructure.grpc.auth_interceptor import AuthInterceptor, principal_from_context
 from infrastructure.grpc.error_interceptor import ErrorInterceptor
+from infrastructure.observability.latency import timed
 
 logger = logging.getLogger("voice_module")
 
@@ -51,6 +53,7 @@ def _auth_response(pair):
 class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
     def __init__(self, container):
         self.container = container
+        self._settings_cache = TtlCache(ttl_seconds=30)
 
     # --- Auth (public RPCs; the interceptor lets them through without a token) ---
 
@@ -132,53 +135,61 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             )
             return
 
-        # Identity comes from the token already verified by AuthInterceptor, NOT
-        # request.user_id (deprecated) and without re-verifying the signature.
-        principal = principal_from_context()
-        user_id = principal.user_id if principal else request.user_id
+        with timed("ExecuteCommand.total"):
+            # Identity comes from the token already verified by AuthInterceptor, NOT
+            # request.user_id (deprecated) and without re-verifying the signature.
+            principal = principal_from_context()
+            user_id = principal.user_id if principal else request.user_id
 
-        # Resolve this user's configurable confirmation scope (best-effort): a
-        # repo/user miss leaves it None, which falls back to the catalog default.
-        confirm_actions = None
-        repo = getattr(self.container, "user_repository", None)
-        if repo is not None:
-            try:
-                user = await repo.find_by_id(user_id)
-                if user is not None:
-                    confirm_actions = confirm_actions_from_settings(user.settings)
-            except Exception as exc:  # noqa: BLE001 - degrade gracefully
-                logger.warning(
-                    "grpc_ExecuteCommand settings_lookup_failed peer=%s error=%s",
-                    context.peer(), exc,
-                )
+            # Resolve this user's configurable confirmation scope (best-effort): a
+            # repo/user miss leaves it None, which falls back to the catalog default.
+            confirm_actions = None
+            repo = getattr(self.container, "user_repository", None)
+            if repo is not None:
+                try:
+                    cached = self._settings_cache.get(user_id)
+                    if cached is not None:
+                        confirm_actions = cached
+                    else:
+                        with timed("ExecuteCommand.mongo"):
+                            user = await repo.find_by_id(user_id)
+                        if user is not None:
+                            confirm_actions = confirm_actions_from_settings(user.settings)
+                            if confirm_actions is not None:
+                                self._settings_cache.put(user_id, confirm_actions)
+                except Exception as exc:  # noqa: BLE001 - degrade gracefully
+                    logger.warning(
+                        "grpc_ExecuteCommand settings_lookup_failed peer=%s error=%s",
+                        context.peer(), exc,
+                    )
 
-        input_dto = ExecuteCommandInputDTO(
-            text=request.command,
-            user_id=user_id,
-            screen_elements=[_to_screen(e) for e in request.screen_elements],
-            order_id=request.order_id or None,
-            confirm_actions=confirm_actions,
-        )
-        # Unhandled errors propagate to the global ErrorInterceptor, which logs the
-        # real cause server-side and returns a generic INTERNAL (US-10.1).
-        output = await use_case.execute(input_dto)
+            input_dto = ExecuteCommandInputDTO(
+                text=request.command,
+                user_id=user_id,
+                screen_elements=[_to_screen(e) for e in request.screen_elements],
+                order_id=request.order_id or None,
+                confirm_actions=confirm_actions,
+            )
+            # Unhandled errors propagate to the global ErrorInterceptor, which logs the
+            # real cause server-side and returns a generic INTERNAL (US-10.1).
+            output = await use_case.execute(input_dto)
 
-        logger.info(
-            "grpc_ExecuteCommand ok peer=%s action=%s confidence=%.2f step=%d complete=%s",
-            context.peer(), output.action_type, output.confidence,
-            output.step, output.task_complete,
-        )
-        return pb2.CommandResponse(
-            success=output.success,
-            out_message=output.reply_text,
-            action_type=output.action_type,
-            parameters_json=json.dumps(output.parameters, ensure_ascii=False),
-            confidence=output.confidence,
-            requires_confirmation=output.requires_confirmation,
-            task_complete=output.task_complete,
-            step=output.step,
-            awaiting_confirmation=output.awaiting_confirmation,
-        )
+            logger.info(
+                "grpc_ExecuteCommand ok peer=%s action=%s confidence=%.2f step=%d complete=%s",
+                context.peer(), output.action_type, output.confidence,
+                output.step, output.task_complete,
+            )
+            return pb2.CommandResponse(
+                success=output.success,
+                out_message=output.reply_text,
+                action_type=output.action_type,
+                parameters_json=json.dumps(output.parameters, ensure_ascii=False),
+                confidence=output.confidence,
+                requires_confirmation=output.requires_confirmation,
+                task_complete=output.task_complete,
+                step=output.step,
+                awaiting_confirmation=output.awaiting_confirmation,
+            )
 
     # --- User settings (protected; identity from the verified token) ---
 
@@ -221,6 +232,7 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
         current = await repo.find_by_id(principal.user_id)
         merged = {**(current.settings if current is not None else {}), **incoming}
         user = await repo.update_settings(principal.user_id, merged)
+        self._settings_cache.invalidate(principal.user_id)
         return pb2.SettingsResponse(
             settings_json=json.dumps(user.settings, ensure_ascii=False)
         )
@@ -248,9 +260,10 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
         # request.user_id (deprecated) and without re-verifying the signature.
         principal = principal_from_context()
         session_id = principal.user_id if principal else request.user_id
-        input_dto = ChatInputDTO(text=request.message, session_id=session_id)
+        input_dto = ChatInputDTO(text=request.message, session_id=session_id, enable_web_search=request.enable_web_search)
         # Unhandled errors propagate to the global ErrorInterceptor (US-10.1).
-        output = await use_case.execute(input_dto)
+        with timed("StreamChat.total"):
+            output = await use_case.execute(input_dto)
 
         logger.info("grpc_StreamChat ok peer=%s chars=%d", context.peer(), len(output.text))
         yield pb2.MessageResponse(
@@ -278,8 +291,9 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             file_format=request.format,
             beam_size=request.beam_size
         )
-        # Note:STT execution is synchronous in current implementation
-        output = use_case.execute(input_dto)
+        # STT execution is synchronous — offload to thread to free the event loop
+        with timed("Transcribe.total"):
+            output = await asyncio.to_thread(use_case.execute, input_dto)
 
         return pb2.TranscribeResponse(
             text=output.text,
