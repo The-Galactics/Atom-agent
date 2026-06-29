@@ -260,7 +260,7 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
         # request.user_id (deprecated) and without re-verifying the signature.
         principal = principal_from_context()
         session_id = principal.user_id if principal else request.user_id
-        input_dto = ChatInputDTO(text=request.message, session_id=session_id)
+        input_dto = ChatInputDTO(text=request.message, session_id=session_id, enable_web_search=request.enable_web_search)
         # Unhandled errors propagate to the global ErrorInterceptor (US-10.1).
         with timed("StreamChat.total"):
             output = await use_case.execute(input_dto)

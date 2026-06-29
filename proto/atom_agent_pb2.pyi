@@ -117,14 +117,16 @@ class SettingsResponse(_message.Message):
     def __init__(self, settings_json: _Optional[str] = ...) -> None: ...
 
 class MessageRequest(_message.Message):
-    __slots__ = ("user_id", "chat_id", "message")
+    __slots__ = ("user_id", "chat_id", "message", "enable_web_search")
     USER_ID_FIELD_NUMBER: _ClassVar[int]
     CHAT_ID_FIELD_NUMBER: _ClassVar[int]
     MESSAGE_FIELD_NUMBER: _ClassVar[int]
+    ENABLE_WEB_SEARCH_FIELD_NUMBER: _ClassVar[int]
     user_id: str
     chat_id: str
     message: str
-    def __init__(self, user_id: _Optional[str] = ..., chat_id: _Optional[str] = ..., message: _Optional[str] = ...) -> None: ...
+    enable_web_search: bool
+    def __init__(self, user_id: _Optional[str] = ..., chat_id: _Optional[str] = ..., message: _Optional[str] = ..., enable_web_search: _Optional[bool] = ...) -> None: ...
 
 class MessageResponse(_message.Message):
     __slots__ = ("script_token", "status", "finished")

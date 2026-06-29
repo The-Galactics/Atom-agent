@@ -21,7 +21,7 @@ class FakeLLM(LLMPort):
         self.reply = reply
         self.last_messages = None
 
-    async def chat(self, messages, temperature=0.7, max_tokens=1024):
+    async def chat(self, messages, temperature=0.7, max_tokens=1024, web_search=None):
         self.last_messages = messages
         return ChatMessage(role="assistant", content=self.reply)
 

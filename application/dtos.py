@@ -45,6 +45,7 @@ class SynthesizeSpeechOutputDTO:
 class ChatInputDTO:
     text: str
     session_id: str = "default"
+    enable_web_search: bool = False
 
 
 @dataclass

@@ -137,6 +137,7 @@ message MessageRequest {
   string user_id = 1 [deprecated = true];
   string chat_id = 2;
   string message = 3;
+  bool enable_web_search = 4;
 }
 
 message MessageResponse {
