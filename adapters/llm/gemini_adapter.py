@@ -27,23 +27,27 @@ class GeminiAdapter(LLMPort):
         # (Gemini 2.x or newer) + a recent langchain-google-genai.
         self.web_search = web_search
 
-    async def chat(self, messages: list[ChatMessage]) -> ChatMessage:
+    async def chat(self, messages: list[ChatMessage], web_search=None) -> ChatMessage:
+        grounded = self.web_search if web_search is None else web_search
         # Translate internal messages into LangChain tuple format.
         langchain_messages = [
             ("system" if m.role == "system" else "human" if m.role == "user" else "ai", m.content)
             for m in messages
         ]
-        response = await self._invoke(langchain_messages)
+        response = await self._invoke(langchain_messages, grounded=grounded)
         return ChatMessage(role="assistant", content=extract_text(response.content))
 
-    async def _invoke(self, langchain_messages):
+    async def _invoke(self, langchain_messages, grounded=None):
         """Invoke the model, grounding with Google Search when enabled.
 
         Grounding is best-effort: if the installed model/library rejects the
         google_search tool we log once and fall back to an ungrounded call so a
         misconfiguration degrades the answer quality instead of breaking chat.
+        The ``grounded`` flag overrides ``self.web_search`` when provided; pass
+        ``None`` (the default) to use the construction-time setting.
         """
-        if self.web_search:
+        effective = grounded if grounded is not None else self.web_search
+        if effective:
             try:
                 with timed("llm.chat"):
                     return await self.llm.ainvoke(
