@@ -3,12 +3,12 @@ import logging
 from langchain_google_genai import ChatGoogleGenerativeAI
 
 from adapters.llm.content import extract_text
-from infrastructure.observability.latency import timed
 from application.agents.prompts.intent_prompt import INTENT_SYSTEM_PROMPT
 from domain.datetime_context import current_datetime_sentence
 from domain.errors import ProviderError
 from domain.intent.catalog import openai_tools, spec_for_tool, validate_and_coerce_args
 from domain.intent.models import Action, ActionType, IntentResult
+from infrastructure.observability.latency import timed
 from ports.intent_port import IntentRecognizerPort
 
 logger = logging.getLogger("voice_module")
@@ -92,7 +92,6 @@ class GeminiFunctionCallingAdapter(IntentRecognizerPort):
             temperature=0.0,  # deterministic routing for orders
             max_output_tokens=max_output_tokens,
         )
-        self._base_llm = llm
         # Bind once; the bound model is reused for every recognition call.
         self._llm = llm.bind_tools(openai_tools())
         self._timezone = timezone

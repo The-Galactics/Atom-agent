@@ -10,7 +10,26 @@ def _adapter_with_mock_client():
     a.collection_name = "skills"
     a.vector_size = 0
     a._collection_ready = False
+    a._ensure_lock = asyncio.Lock()
     return a
+
+
+def test_concurrent_cold_start_creates_collection_once(monkeypatch):
+    a = _adapter_with_mock_client()
+    a._client.get_collection.side_effect = Exception("not found")
+    created = {"n": 0}
+
+    def fake_create(target):
+        created["n"] += 1
+
+    monkeypatch.setattr(a, "_create_collection", fake_create)
+
+    async def run():
+        await asyncio.gather(a._ensure_collection(8), a._ensure_collection(8))
+
+    asyncio.run(run())
+    assert created["n"] == 1
+    assert a._collection_ready is True
 
 
 def test_ensure_collection_offloads_blocking_get_to_thread(monkeypatch):

@@ -23,3 +23,10 @@ def test_enable_web_search_flag_reaches_graph_state():
     uc = ChatUseCase(g, _History())
     asyncio.run(uc.execute(ChatInputDTO(text="hi", session_id="s", enable_web_search=True)))
     assert g.seen_state["web_search"] is True
+
+
+def test_default_web_search_is_false_in_graph_state():
+    g = _Graph()
+    uc = ChatUseCase(g, _History())
+    asyncio.run(uc.execute(ChatInputDTO(text="hi", session_id="s")))
+    assert g.seen_state["web_search"] is False
