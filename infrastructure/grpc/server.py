@@ -291,9 +291,9 @@ class AtomGrpcService(pb2_grpc.AtomAgentServiceServicer):
             file_format=request.format,
             beam_size=request.beam_size
         )
-        # Note:STT execution is synchronous in current implementation
+        # STT execution is synchronous — offload to thread to free the event loop
         with timed("Transcribe.total"):
-            output = use_case.execute(input_dto)
+            output = await asyncio.to_thread(use_case.execute, input_dto)
 
         return pb2.TranscribeResponse(
             text=output.text,
