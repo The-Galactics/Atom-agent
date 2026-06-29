@@ -35,6 +35,15 @@ def test_per_call_override_true_attaches_tool():
     assert kwargs.get("tools")
 
 
-def test_config_default_is_off():
+def test_per_call_override_false_forces_off():
+    a = _adapter(web_search=True)
+    asyncio.run(a.chat([ChatMessage(role="user", content="hi")], web_search=False))
+    _, kwargs = a.llm.ainvoke.call_args
+    assert "tools" not in kwargs or not kwargs["tools"]
+
+
+def test_config_default_is_off(monkeypatch):
+    monkeypatch.delenv("WEB_SEARCH_ENABLED", raising=False)
     get_settings.cache_clear()
     assert get_settings().web_search_enabled is False
+    get_settings.cache_clear()   # leave no cached Settings for other tests
